@@ -47,7 +47,7 @@ def resolve_deep_target_url(page, initial_url, job_title):
                     continue
             break
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Redirect Error: {e}")
             break
     return current_url, page
 
@@ -84,15 +84,19 @@ def extract_job_details(page, target_url):
             "snippet": page_text[:400]
         }
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Extraction Error: {e}")
         return None
 
 def run_crawler():
+    print("Connecting to Supabase and fetching pending jobs...")
     response = supabase.table("raw_jobs").select("*").eq("status", "pending").limit(10).execute()
     raw_jobs = response.data
 
     if not raw_jobs:
+        print("No pending jobs found in database.")
         return
+
+    print(f"Found {len(raw_jobs)} pending jobs to process.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -107,6 +111,7 @@ def run_crawler():
             if not source_link:
                 continue
 
+            print(f"Processing Job ID: {job_id} | Title: {job_title}")
             resolved_url, page = resolve_deep_target_url(page, source_link, job_title)
             enriched_data = extract_job_details(page, resolved_url)
 
@@ -118,6 +123,9 @@ def run_crawler():
                     "snippet": f"Email: {enriched_data['email']} | Phone: {enriched_data['phone']} | {enriched_data['snippet']}",
                     "status": "pendings"
                 }).eq("id", job_id).execute()
+                print(f"Successfully updated Job ID: {job_id} to 'pendings'.")
+            else:
+                print(f"Failed to extract data for Job ID: {job_id}")
 
             time.sleep(2)
 
