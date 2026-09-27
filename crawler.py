@@ -172,12 +172,13 @@ def clean_text_content(text):
         return ""
     cleaned = re.sub(r"(?i)we use cookies.*?(accept|agree|decline|settings)", "", text)
     cleaned = re.sub(r"(?i)privacy policy.*?(rights reserved|cookies)", "", cleaned)
+    cleaned = re.sub(r"(?i)αυτή η ιστοσελίδα χρησιμοποιεί cookies.*?(επιλογή συγκατάθεσης|απαραίτητα cookies)", "", cleaned)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
 def extract_strict_job_details(page, target_url):
     try:
-        page.goto(target_url, timeout=25000, wait_until="domcontentloaded")
-        time.sleep(3)
+        page.goto(target_url, timeout=30000, wait_until="domcontentloaded")
+        time.sleep(4)
         
         html_content = page.content()
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -188,20 +189,30 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        if any(term in page_text.lower() for term in ["cookie policy", "privacy policy", "legal notice", "page not found", "error 404", "job expired", "position filled", "sign in to view"]):
+        # سخت فلٹرز: اگر یہ عام صفحات یا کوکی بینرز ہوئے تو فوراً مسترد کر دیں
+        bad_terms = [
+            "cookie policy", "privacy policy", "legal notice", "page not found", 
+            "error 404", "job expired", "position filled", "sign in to view",
+            "χρησιμοποιεί cookies", "συναίνεση", "επιλογή συγκατάθεσης", "απαραίτητα cookies"
+        ]
+        if any(term in page_text.lower() for term in bad_terms):
+            print(f"[WARNING] Rejected generic/cookie page: {target_url}")
             return None
 
-        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante", "iş ilanı", "mühendis"]
-        if not any(ind in page_text.lower() for ind in job_indicators):
+        # اصل جاب کے ہونے کی لازمی شرط (کم از کم دو اشارے موجود ہوں)
+        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante", "iş ilanı", "mühendis", "θέσεις εργασίας", "απαραίτητα"]
+        match_count = sum(1 for ind in job_indicators if ind in page_text.lower())
+        if match_count < 2:
+            print(f"[WARNING] Page lacks valid job indicators (Matched: {match_count}): {target_url}")
             return None
 
         salary = "Not Specified"
-        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$|₺)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
+        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$|₺|€)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
         if salary_match:
             salary = salary_match.group(0).strip()
 
         location = "Local / On-site"
-        loc_match = re.search(r'(?:Location|City|Address|Area):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
+        loc_match = re.search(r'(?:Location|City|Address|Area|Τοποθεσία):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
         if loc_match:
             location = loc_match.group(1).strip()[:50]
 
@@ -214,16 +225,17 @@ def extract_strict_job_details(page, target_url):
         paragraphs = []
         for p in soup.find_all(['p', 'div', 'li']):
             txt = p.get_text().strip()
-            if len(txt) > 30 and any(k in txt.lower() for k in ["apply", "salary", "requirement", "experience", "qualification", "duty", "responsibility", "benefit", "position"]):
+            if len(txt) > 40 and any(k in txt.lower() for k in ["apply", "salary", "requirement", "experience", "qualification", "duty", "responsibility", "benefit", "position", "προσόντα", "αρμοδιότητες"]):
                 if txt not in paragraphs:
                     paragraphs.append(txt)
 
-        intro_snippet = " ".join(page_text.split()[:120])
+        intro_snippet = " ".join(page_text.split()[:150])
         combined_details = intro_snippet
         if paragraphs:
             combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:8]])
 
-        if len(combined_details.split()) < 30:
+        if len(combined_details.split()) < 40:
+            print(f"[WARNING] Extracted content is too short: {target_url}")
             return None
 
         return {
@@ -234,7 +246,8 @@ def extract_strict_job_details(page, target_url):
             "phone": phone,
             "snippet": combined_details[:1800]
         }
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] Exception during details extraction: {e}")
         return None
 
 def run_independent_crawler():
@@ -285,13 +298,12 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    for keyword in keywords[:3]: # ہر ڈومین پر کم از کم 3 مختلف کیوریز ٹرائی کرے گا
+                    for keyword in keywords[:3]: 
                         if posts_found >= required_posts:
                             break
 
                         print(f"-> Searching Domain: {target_domain} | City: {target_city} | Keyword: {keyword}")
                         
-                        # کیوری بیسڈ یو آر ایل جنریٹ کرنا تاکہ یہ سیدھا سرچ رزلٹ پر جائے
                         search_urls = [
                             f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
                             f"https://www.{target_domain}/search?q={keyword}",
@@ -302,8 +314,8 @@ def run_independent_crawler():
                             if posts_found >= required_posts:
                                 break
                             try:
-                                page.goto(s_url, timeout=25000, wait_until="domcontentloaded")
-                                time.sleep(4)
+                                page.goto(s_url, timeout=30000, wait_until="domcontentloaded")
+                                time.sleep(5)
 
                                 html = page.content()
                                 soup = BeautifulSoup(html, 'html.parser')
@@ -315,22 +327,22 @@ def run_independent_crawler():
                                     href = a['href']
                                     txt = a.get_text().lower()
                                     
-                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in"]):
+                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "συναίνεση"]):
                                         continue
 
-                                    if keyword.lower() in href.lower() or keyword.lower() in txt or "job" in href.lower() or "ilan" in href.lower() or "position" in href.lower():
+                                    if keyword.lower() in href.lower() or keyword.lower() in txt or "job" in href.lower() or "ilan" in href.lower() or "position" in href.lower() or "εξατομίκευση" in txt:
                                         if href.startswith('/'):
                                             job_link = f"https://www.{target_domain}{href}"
                                         elif href.startswith('http'):
                                             job_link = href
                                         
                                         title_text = a.get_text().strip()
-                                        if len(title_text) > 10:
+                                        if len(title_text) > 15 and not any(b in title_text.lower() for b in ["cookie", "privacy", "όροι"]):
                                             job_title = title_text[:100]
                                             break
 
                                 if job_link:
-                                    print(f"-> Found Job Link: {job_link}")
+                                    print(f"-> Checking Potential Job Link: {job_link}")
                                     enriched_data = extract_strict_job_details(page, job_link)
                                     
                                     if enriched_data:
@@ -366,7 +378,8 @@ def run_independent_crawler():
                                             break
                                         except Exception as db_err:
                                             print(f"[ERROR] Supabase Insertion Failed: {db_err}")
-                            except Exception:
+                            except Exception as ex:
+                                print(f"[DEBUG] Error navigating URL {s_url}: {ex}")
                                 continue
 
             browser.close()
