@@ -146,7 +146,7 @@ def extract_strict_job_details(page, target_url):
         page_text = clean_text_content(page_text)
 
         if any(term in page_text.lower() for term in ["cookie policy", "privacy notice", "page not found", "error 404", "job expired", "position filled"]):
-            print(f"[WARNING] Page skipped due to filter match (Cookie/404/Expired) on: {target_url}")
+            print(f"[WARNING] Page skipped due to filter match on: {target_url}")
             return None
 
         salary = "Not Specified"
@@ -240,13 +240,14 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    print(f"-> Searching City: {target_city} | Portal: {target_domain}")
-                    search_keywords = f"job hiring vacancy {target_city} {target_country} {current_year}"
-                    search_url = f"https://www.google.com/search?q=site:{target_domain}+{search_keywords.replace(' ', '+')}"
+                    print(f"-> Direct Targeting Portal: {target_domain} in City: {target_city}")
+                    
+                    # براہِ راست ڈومین کے اپنے ہوم پیج یا سرچ پیج پر جانا (گوگل کو بالکل نکال دیا گیا ہے)
+                    direct_portal_url = f"https://www.{target_domain}"
                     
                     try:
-                        page.goto(search_url, timeout=25000, wait_until="domcontentloaded")
-                        time.sleep(3)
+                        page.goto(direct_portal_url, timeout=30000, wait_until="domcontentloaded")
+                        time.sleep(4)
 
                         html = page.content()
                         soup = BeautifulSoup(html, 'html.parser')
@@ -254,27 +255,33 @@ def run_independent_crawler():
                         job_link = None
                         job_title = f"{target_country} - {target_city} Job Opening ({current_year})"
 
-                        for a in soup.select('div.g a'):
-                            href = a.get('href', '')
-                            if href and href.startswith('http') and target_domain in href and 'google' not in href:
-                                job_link = href
-                                title_elem = a.find('h3')
-                                if title_elem:
-                                    job_title = title_elem.get_text()
+                        # پورٹل کے اندر موجود جاب یا کیریئر لنکس کو ڈھونڈنا
+                        for a in soup.find_all('a', href=True):
+                            href = a['href']
+                            txt = a.get_text().lower()
+                            
+                            # ایسے لنکس جن میں جاب، کیریئر یا ویکینسی کا ذکر ہو
+                            if any(k in href.lower() or k in txt for k in ["job", "career", "vacancy", "position", "offer", "detail", "einzel"]):
+                                if href.startswith('/'):
+                                    job_link = f"https://www.{target_domain}{href}"
+                                elif href.startswith('http'):
+                                    job_link = href
+                                
+                                title_text = a.get_text().strip()
+                                if len(title_text) > 10:
+                                    job_title = title_text[:100]
                                 break
                         
+                        # اگر براہِ راست لنک نہ ملے تو ہوم پیج کا پہلا بہترین جاب لنک اٹھا لو
                         if not job_link:
                             for a in soup.find_all('a', href=True):
                                 href = a['href']
-                                if target_domain in href and href.startswith('http') and "google" not in href:
-                                    job_link = href
-                                    title_tag = a.find('h3')
-                                    if title_tag:
-                                        job_title = title_tag.get_text()
+                                if target_domain in href and len(href) > len(f"https://www.{target_domain}") + 3:
+                                    job_link = href if href.startswith('http') else f"https://www.{target_domain}{href}"
                                     break
 
                         if job_link:
-                            print(f"-> Found Link: {job_link}")
+                            print(f"-> Found Direct Link: {job_link}")
                             enriched_data = extract_strict_job_details(page, job_link)
                             
                             if enriched_data:
@@ -298,7 +305,7 @@ def run_independent_crawler():
                                     'link': enriched_data['finalUrl'],
                                     'country': f"{target_country} ({target_city})",
                                     'category': "Jobs",
-                                    'query_used': f"site:{target_domain} {search_keywords}",
+                                    'query_used': f"Direct visit to {target_domain} for {target_city}",
                                     'status': 'pending',
                                     'created_at': 'now()'
                                 }
@@ -311,9 +318,9 @@ def run_independent_crawler():
                                 except Exception as db_err:
                                     print(f"[ERROR] Supabase Insertion Failed: {db_err}")
                             else:
-                                print(f"[INFO] Skipping link due to insufficient or invalid content extraction.")
+                                print(f"[INFO] Skipping link due to insufficient content extraction.")
                         else:
-                            print(f"[INFO] No valid link found for {target_domain} in {target_city}.")
+                            print(f"[INFO] No valid job link found on portal {target_domain}.")
 
                     except Exception as inner_e:
                         print(f"[ERROR] Iteration Exception in City [{target_city}] with Domain [{target_domain}]: {inner_e}")
