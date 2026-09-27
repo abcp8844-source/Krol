@@ -8,7 +8,12 @@ from playwright.sync_api import sync_playwright
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+except Exception as e:
+    print(f"Supabase Connection Error: {e}")
+    supabase = None
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -23,6 +28,7 @@ def resolve_deep_target_url(page, initial_url, job_title):
 
     while hops < max_hops:
         try:
+            print(f"Navigating to URL: {current_url}")
             page.goto(current_url, timeout=20000, wait_until="domcontentloaded")
             time.sleep(2)
             current_url = page.url
@@ -46,12 +52,14 @@ def resolve_deep_target_url(page, initial_url, job_title):
                     hops += 1
                     continue
             break
-        except Exception:
+        except Exception as e:
+            print(f"URL Resolution Error at hop {hops}: {e}")
             break
     return current_url, page
 
 def extract_job_details(page, target_url):
     try:
+        print(f"Extracting details from: {target_url}")
         page.goto(target_url, timeout=20000, wait_until="domcontentloaded")
         time.sleep(2)
         html_content = page.content()
@@ -82,50 +90,72 @@ def extract_job_details(page, target_url):
             "phone": phone,
             "snippet": page_text[:400].strip()
         }
-    except Exception:
+    except Exception as e:
+        print(f"Extraction Error: {e}")
         return None
 
 def run_crawler():
-    response = supabase.table("raw_jobs").select("*").eq("status", "pending").limit(5).execute()
-    raw_jobs = response.data
-
-    if not raw_jobs:
+    if not supabase:
+        print("Supabase client is not available.")
         return
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(user_agent=random.choice(USER_AGENTS))
-        page = context.new_page()
+    try:
+        print("Fetching pending jobs...")
+        response = supabase.table("raw_jobs").select("*").eq("status", "pending").limit(5).execute()
+        raw_jobs = response.data
+    except Exception as e:
+        print(f"Database Fetch Error: {e}")
+        return
 
-        for job in raw_jobs:
-            job_id = job.get("id")
-            source_link = job.get("source_link")
-            job_title = job.get("query_used")
+    if not raw_jobs:
+        print("No pending jobs found.")
+        return
 
-            if not source_link:
-                continue
+    print(f"Found {len(raw_jobs)} jobs to process.")
 
-            resolved_url, page = resolve_deep_target_url(page, source_link, job_title)
-            enriched_data = extract_job_details(page, resolved_url)
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+            page = context.new_page()
 
-            # صرف اس وقت اپڈیٹ کرے گا جب اصلی مواد یا مفید معلومات ہاتھ آئیں گی
-            if enriched_data and (
-                enriched_data["salary"] != "Not Specified" or 
-                enriched_data["email"] != "" or 
-                enriched_data["phone"] != "" or 
-                len(enriched_data["snippet"]) > 100
-            ):
-                supabase.table("raw_jobs").update({
-                    "source_link": enriched_data["finalUrl"],
-                    "salary": enriched_data["salary"],
-                    "location": enriched_data["location"],
-                    "snippet": f"Email: {enriched_data['email']} | Phone: {enriched_data['phone']} | {enriched_data['snippet']}",
-                    "status": "pendings"
-                }).eq("id", job_id).execute()
+            for job in raw_jobs:
+                job_id = job.get("id")
+                source_link = job.get("link")
+                job_title = job.get("query_used")
 
-            time.sleep(2)
+                if not source_link:
+                    print(f"Skipping ID {job_id}: Missing link.")
+                    continue
 
-        browser.close()
+                print(f"Processing ID: {job_id}")
+                
+                try:
+                    resolved_url, page = resolve_deep_target_url(page, source_link, job_title)
+                    enriched_data = extract_job_details(page, resolved_url)
+
+                    if enriched_data and (
+                        enriched_data["salary"] != "Not Specified" or 
+                        enriched_data["email"] != "" or 
+                        enriched_data["phone"] != "" or 
+                        len(enriched_data["snippet"]) > 100
+                    ):
+                        supabase.table("raw_jobs").update({
+                            "link": enriched_data["finalUrl"],
+                            "snippet": f"Salary: {enriched_data['salary']} | Location: {enriched_data['location']} | Email: {enriched_data['email']} | Phone: {enriched_data['phone']} | {enriched_data['snippet']}",
+                            "status": "pendings"
+                        }).eq("id", job_id).execute()
+                        print(f"Successfully updated ID {job_id} to 'pendings'.")
+                    else:
+                        print(f"Insufficient data found for ID {job_id}. Status remains pending.")
+                except Exception as inner_e:
+                    print(f"Error processing record ID {job_id}: {inner_e}")
+
+                time.sleep(2)
+
+            browser.close()
+    except Exception as browser_e:
+        print(f"Playwright Execution Error: {browser_e}")
 
 if __name__ == "__main__":
     run_crawler()
