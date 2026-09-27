@@ -36,47 +36,47 @@ SCHEDULE = {
 }
 
 COUNTRY_CITIES = {
-    "UAE": ["Dubai", "Abu Dhabi", "Sharjah", "Ajman"],
-    "Saudi Arabia": ["Riyadh", "Jeddah", "Mecca", "Medina"],
-    "Qatar": ["Doha", "Al Rayyan", "Al Wakrah"],
-    "Bahrain": ["Manama", "Muharraq", "Riffa"],
-    "Kuwait": ["Kuwait City", "Hawalli", "Salmiya"],
-    "Oman": ["Muscat", "Salalah", "Sohar"],
-    "Japan": ["Tokyo", "Osaka", "Kyoto", "Yokohama"],
-    "South Korea": ["Seoul", "Busan", "Incheon"],
-    "China": ["Shanghai", "Beijing", "Shenzhen", "Guangzhou"],
-    "Taiwan": ["Taipei", "Kaohsiung", "Taichung"],
+    "UAE": ["Dubai", "Abu Dhabi", "Sharjah"],
+    "Saudi Arabia": ["Riyadh", "Jeddah"],
+    "Qatar": ["Doha"],
+    "Bahrain": ["Manama"],
+    "Kuwait": ["Kuwait City"],
+    "Oman": ["Muscat"],
+    "Japan": ["Tokyo", "Osaka"],
+    "South Korea": ["Seoul"],
+    "China": ["Shanghai", "Beijing"],
+    "Taiwan": ["Taipei"],
     "Singapore": ["Singapore"],
-    "Hong Kong": ["Hong Kong", "Kowloon"],
-    "Thailand": ["Bangkok", "Phuket", "Chiang Mai"],
-    "Vietnam": ["Ho Chi Minh City", "Hanoi", "Da Nang"],
-    "Malaysia": ["Kuala Lumpur", "Penang", "Johor Bahru"],
-    "Indonesia": ["Jakarta", "Surabaya", "Bandung"],
-    "Philippines": ["Manila", "Cebu City", "Davao"],
-    "Germany": ["Berlin", "Munich", "Frankfurt", "Hamburg"],
-    "France": ["Paris", "Lyon", "Marseille", "Toulouse"],
-    "Netherlands": ["Amsterdam", "Rotterdam", "The Hague"],
-    "Belgium": ["Brussels", "Antwerp", "Ghent"],
-    "Switzerland": ["Zurich", "Geneva", "Basel"],
-    "Austria": ["Vienna", "Salzburg", "Graz"],
-    "UK": ["London", "Manchester", "Birmingham", "Edinburgh"],
-    "Ireland": ["Dublin", "Cork", "Galway"],
-    "Sweden": ["Stockholm", "Gothenburg", "Malmo"],
-    "Norway": ["Oslo", "Bergen", "Trondheim"],
-    "Denmark": ["Copenhagen", "Aarhus", "Odense"],
-    "Finland": ["Helsinki", "Espoo", "Tampere"],
-    "Canada": ["Toronto", "Vancouver", "Montreal", "Calgary"],
-    "USA": ["New York", "Los Angeles", "Chicago", "Houston"],
-    "Mexico": ["Mexico City", "Guadalajara", "Monterrey"],
-    "Panama": ["Panama City", "Colon"],
-    "Brazil": ["São Paulo", "Rio de Janeiro", "Brasília"],
-    "Argentina": ["Buenos Aires", "Córdoba", "Rosario"],
-    "Italy": ["Rome", "Milan", "Naples", "Turin"],
+    "Hong Kong": ["Hong Kong"],
+    "Thailand": ["Bangkok", "Phuket"],
+    "Vietnam": ["Ho Chi Minh City", "Hanoi"],
+    "Malaysia": ["Kuala Lumpur"],
+    "Indonesia": ["Jakarta"],
+    "Philippines": ["Manila"],
+    "Germany": ["Berlin", "Munich", "Frankfurt"],
+    "France": ["Paris", "Lyon"],
+    "Netherlands": ["Amsterdam"],
+    "Belgium": ["Brussels"],
+    "Switzerland": ["Zurich"],
+    "Austria": ["Vienna"],
+    "UK": ["London", "Manchester", "Birmingham"],
+    "Ireland": ["Dublin"],
+    "Sweden": ["Stockholm"],
+    "Norway": ["Oslo"],
+    "Denmark": ["Copenhagen"],
+    "Finland": ["Helsinki"],
+    "Canada": ["Toronto", "Vancouver"],
+    "USA": ["New York", "Los Angeles", "Chicago"],
+    "Mexico": ["Mexico City"],
+    "Panama": ["Panama City"],
+    "Brazil": ["São Paulo", "Rio de Janeiro"],
+    "Argentina": ["Buenos Aires"],
+    "Italy": ["Rome", "Milan"],
     "Turkey": ["Istanbul", "Ankara", "Izmir"],
-    "Azerbaijan": ["Baku", "Ganja"],
-    "Georgia": ["Tbilisi", "Batumi"],
-    "Spain": ["Madrid", "Barcelona", "Valencia", "Seville", "Bilbao", "Malaga"],
-    "Greece": ["Athens", "Thessaloniki"]
+    "Azerbaijan": ["Baku"],
+    "Georgia": ["Tbilisi"],
+    "Spain": ["Madrid", "Barcelona", "Valencia"],
+    "Greece": ["Athens"]
 }
 
 COUNTRY_DUAL_DOMAINS = {
@@ -124,47 +124,47 @@ COUNTRY_DUAL_DOMAINS = {
 }
 
 COUNTRY_KEYWORDS = {
-    "UAE": ["job", "career", "vacancy", "position", "وظائف", "emploi", "hiring", "opportunities", "work", "apply"],
-    "Saudi Arabia": ["job", "career", "vacancy", "position", "وظائف", "vancancy", "employment", "hiring", "opportunities", "apply"],
-    "Qatar": ["job", "career", "vacancy", "position", "وظائف", "hiring", "employment", "opportunities", "work"],
-    "Bahrain": ["job", "career", "vacancy", "position", "وظائف", "hiring", "employment", "opportunities"],
-    "Kuwait": ["job", "career", "vacancy", "position", "وظائف", "hiring", "employment", "opportunities"],
-    "Oman": ["job", "career", "vacancy", "position", "وظائف", "hiring", "employment", "opportunities"],
-    "Japan": ["job", "career", "vacancy", "position", "求人", "採用", "仕事", "中途", "正社員", "hiring"],
-    "South Korea": ["job", "career", "vacancy", "position", "채용", "구인", "일자리", "취업", "모집", "hiring"],
-    "China": ["job", "career", "vacancy", "position", "招聘", "职位", "工作", "社会招聘", "全职", "hiring"],
-    "Taiwan": ["job", "career", "vacancy", "position", "職缺", "工作", "招募", "求職", "兼職", "hiring"],
-    "Singapore": ["job", "career", "vacancy", "position", "hiring", "employment", "opportunities", "sgjobs"],
-    "Hong Kong": ["job", "career", "vacancy", "position", "招聘", "職位", "筍工", "hiring", "employment"],
-    "Thailand": ["job", "career", "vacancy", "position", "งาน", "สมัครงาน", "จัดหางาน", "hiring", "employment"],
-    "Vietnam": ["job", "career", "vacancy", "position", "việc làm", "tuyển dụng", "cơ hội việc làm", "hiring"],
-    "Malaysia": ["job", "career", "vacancy", "position", "kerja", "jawatan", "kekosongan", "hiring", "employment"],
-    "Indonesia": ["job", "career", "vacancy", "position", "lowongan", "kerja", "loker", "karir", "hiring"],
-    "Philippines": ["job", "career", "vacancy", "position", "trabaho", "hiring", "empleyo", "opportunities"],
-    "Germany": ["job", "career", "vacancy", "position", "stelle", "karriere", "ausbildung", "arbeit", "jobs", "stellenangebot"],
-    "France": ["job", "career", "vacancy", "position", "emploi", "offre", "poste", "carrière", "alternance", "recrutement"],
-    "Netherlands": ["job", "career", "vacancy", "position", "vacature", "baan", "werk", "carriere", "solliciteren"],
-    "Belgium": ["job", "career", "vacancy", "position", "vacature", "emploi", "offres", "travail", "jobs"],
-    "Switzerland": ["job", "career", "vacancy", "position", "stelle", "emploi", "lavoro", "jobs", "karriere"],
-    "Austria": ["job", "career", "vacancy", "position", "stelle", "karriere", "jobbörse", "arbeiten", "jobs"],
-    "UK": ["job", "career", "vacancy", "position", "employment", "opportunity", "roles", "hiring", "work"],
-    "Ireland": ["job", "career", "vacancy", "position", "employment", "opportunities", "hiring", "work"],
-    "Sweden": ["job", "career", "vacancy", "position", "jobb", "lediga", "tjänst", "arbete", "rekrytering"],
-    "Norway": ["job", "career", "vacancy", "position", "stilling", "jobb", "karriere", "arbeid", "ledige"],
-    "Denmark": ["job", "career", "vacancy", "position", "stilling", "ledige", "arbejde", "jobmuligheder"],
-    "Finland": ["job", "career", "vacancy", "position", "työpaikat", "avoimet", "rekrytointi", "työ", "duuni"],
-    "Canada": ["job", "career", "vacancy", "position", "employment", "hiring", "opportunities", "careers", "work"],
-    "USA": ["job", "career", "vacancy", "position", "employment", "hiring", "opportunity", "careers", "opening"],
-    "Mexico": ["job", "career", "vacancy", "position", "empleo", "trabajo", "vacantes", "bolsa de trabajo", "contratacion"],
-    "Panama": ["job", "career", "vacancy", "position", "empleo", "trabajo", "vacantes", "oportunidades"],
-    "Brazil": ["job", "career", "vacancy", "position", "vagas", "emprego", "trabalho", "oportunidades", "contratando"],
-    "Argentina": ["job", "career", "vacancy", "position", "empleo", "trabajo", "busqueda", "ofertas", "empleos"],
-    "Italy": ["job", "career", "vacancy", "position", "lavoro", "offerta", "impiego", "posizioni", "assunzioni", "lavora"],
-    "Turkey": ["job", "career", "vacancy", "position", "iş", "ilan", "kariyer", "pozisyon", "eleman", "araniyor", "personel"],
-    "Azerbaijan": ["job", "career", "vacancy", "position", "iş", "vakansiya", "kadr", "elanlar", "işə", "qəbul"],
-    "Georgia": ["job", "career", "vacancy", "position", "vakansia", "samushao", "وظائف", "სამუშაო", "ვაკანსია"],
-    "Spain": ["job", "career", "vacancy", "position", "empleo", "trabajo", "ofertas", "puesto", "bolsa de empleo", "trabaja"],
-    "Greece": ["job", "career", "vacancy", "position", "douleia", "theseis", "karriera", "εργασία", "θέσεις", "δουλειά"]
+    "UAE": ["engineer", "manager", "developer", "sales", "accountant", "nurse", "driver", "technician", "hr", "admin"],
+    "Saudi Arabia": ["engineer", "manager", "developer", "sales", "accountant", "nurse", "driver", "technician", "supervisor"],
+    "Qatar": ["engineer", "manager", "developer", "sales", "accountant", "hospitality", "admin"],
+    "Bahrain": ["engineer", "manager", "sales", "accountant", "admin"],
+    "Kuwait": ["engineer", "manager", "sales", "accountant", "nurse"],
+    "Oman": ["engineer", "manager", "sales", "accountant"],
+    "Japan": ["engineer", "developer", "sales", "manager", "marketing"],
+    "South Korea": ["engineer", "developer", "manager", "sales"],
+    "China": ["engineer", "developer", "manager", "sales", "analyst"],
+    "Taiwan": ["engineer", "developer", "manager", "sales"],
+    "Singapore": ["engineer", "manager", "developer", "analyst", "sales"],
+    "Hong Kong": ["manager", "developer", "analyst", "sales", "accountant"],
+    "Thailand": ["manager", "engineer", "sales", "admin", "hotel"],
+    "Vietnam": ["developer", "engineer", "manager", "sales"],
+    "Malaysia": ["engineer", "manager", "developer", "sales", "accountant"],
+    "Indonesia": ["engineer", "manager", "sales", "developer"],
+    "Philippines": ["agent", "nurse", "manager", "developer", "engineer"],
+    "Germany": ["developer", "engineer", "manager", "consultant", "analyst"],
+    "France": ["développeur", "ingénieur", "manager", "commercial"],
+    "Netherlands": ["developer", "engineer", "manager", "analyst"],
+    "Belgium": ["developer", "engineer", "manager"],
+    "Switzerland": ["engineer", "developer", "manager", "consultant"],
+    "Austria": ["developer", "engineer", "manager"],
+    "UK": ["developer", "manager", "engineer", "analyst", "consultant", "admin"],
+    "Ireland": ["developer", "manager", "engineer", "sales"],
+    "Sweden": ["developer", "engineer", "manager"],
+    "Norway": ["developer", "engineer", "manager"],
+    "Denmark": ["developer", "engineer", "manager"],
+    "Finland": ["developer", "engineer", "manager"],
+    "Canada": ["developer", "manager", "engineer", "analyst", "representative"],
+    "USA": ["developer", "manager", "engineer", "analyst", "representative", "specialist"],
+    "Mexico": ["gerente", "ingeniero", "desarrollador", "ventas", "analista"],
+    "Panama": ["gerente", "ingeniero", "ventas", "asistente"],
+    "Brazil": ["gerente", "engenheiro", "desenvolvedor", "vendas"],
+    "Argentina": ["gerente", "ingeniero", "analista", "ventas"],
+    "Italy": ["sviluppatore", "ingegnere", "manager", "commerciale"],
+    "Turkey": ["mühendis", "uzman", "yönetici", "müdür", "developer", "satış"],
+    "Azerbaijan": ["mühəndis", "menecer", "mütəxəssis", "satış"],
+    "Georgia": ["manager", "developer", "engineer", "sales"],
+    "Spain": ["ingeniero", "desarrollador", "gerente", "comercial", "analista"],
+    "Greece": ["developer", "manager", "engineer", "sales"]
 }
 
 def clean_text_content(text):
@@ -176,9 +176,8 @@ def clean_text_content(text):
 
 def extract_strict_job_details(page, target_url):
     try:
-        print(f"-> Opening Target Job URL for Deep Scan: {target_url}")
-        page.goto(target_url, timeout=30000, wait_until="domcontentloaded")
-        time.sleep(5)  # تسلی سے لوڈ ہونے کا انتظار
+        page.goto(target_url, timeout=25000, wait_until="domcontentloaded")
+        time.sleep(3)
         
         html_content = page.content()
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -189,19 +188,15 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        # کوکیز، پرائیویسی یا فیل ہونے والے پیجز کو سخت انداز میں مسترد کرنا
         if any(term in page_text.lower() for term in ["cookie policy", "privacy policy", "legal notice", "page not found", "error 404", "job expired", "position filled", "sign in to view"]):
-            print(f"[WARNING] Page skipped due to generic/cookie filter match on: {target_url}")
             return None
 
-        # لازمی چیک: کیا یہ واقعی جاب پوسٹ ہے؟ اس میں ریکوائرمنٹ یا ڈیوٹیز کے الفاظ ہونے چاہئیں
-        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante"]
+        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante", "iş ilanı", "mühendis"]
         if not any(ind in page_text.lower() for ind in job_indicators):
-            print(f"[WARNING] Page does not contain genuine job description indicators: {target_url}")
             return None
 
         salary = "Not Specified"
-        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
+        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$|₺)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
         if salary_match:
             salary = salary_match.group(0).strip()
 
@@ -228,8 +223,7 @@ def extract_strict_job_details(page, target_url):
         if paragraphs:
             combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:8]])
 
-        if len(combined_details.split()) < 40:
-            print(f"[WARNING] Insufficient genuine text length extracted from: {target_url}")
+        if len(combined_details.split()) < 30:
             return None
 
         return {
@@ -240,8 +234,7 @@ def extract_strict_job_details(page, target_url):
             "phone": phone,
             "snippet": combined_details[:1800]
         }
-    except Exception as e:
-        print(f"[ERROR] Extraction Error on URL {target_url}: {e}")
+    except Exception:
         return None
 
 def run_independent_crawler():
@@ -256,13 +249,12 @@ def run_independent_crawler():
     target_country = random.choice(day_countries)
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DUAL_DOMAINS.get(target_country, [])
-    keywords = COUNTRY_KEYWORDS.get(target_country, ["job", "career", "vacancy", "position"])
+    keywords = COUNTRY_KEYWORDS.get(target_country, ["developer", "manager", "engineer"])
     
     if not domains:
-        print(f"[ERROR] No specific local domains configured for country: {target_country}")
         return
 
-    print(f"-> Today: {today} | Target Country: {target_country} | Local Domains: {domains}")
+    print(f"-> Today: {today} | Target Country: {target_country} | Domains: {domains}")
 
     try:
         with sync_playwright() as p:
@@ -283,6 +275,7 @@ def run_independent_crawler():
             
             shuffled_cities = list(cities)
             random.shuffle(shuffled_cities)
+            random.shuffle(keywords)
 
             for target_city in shuffled_cities:
                 if posts_found >= required_posts:
@@ -292,94 +285,89 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    print(f"-> Searching Portal: {target_domain} for City: {target_city}")
-                    
-                    # اب ہم صرف ہوم پیج کے بجائے سرچ یا جاب سیکشن کا یو آر ایل بنائیں گے تاکہ فضول پیج نہ آئیں
-                    direct_portal_url = f"https://www.{target_domain}"
-                    
-                    try:
-                        page.goto(direct_portal_url, timeout=35000, wait_until="domcontentloaded")
-                        time.sleep(6)  # تسلی سے پیج کو رینڈر ہونے دیں
+                    for keyword in keywords[:3]: # ہر ڈومین پر کم از کم 3 مختلف کیوریز ٹرائی کرے گا
+                        if posts_found >= required_posts:
+                            break
 
-                        html = page.content()
-                        soup = BeautifulSoup(html, 'html.parser')
-
-                        job_link = None
-                        job_title = f"{target_country} - {target_city} Job Opening ({current_year})"
-
-                        # ایسے لنکس تلاش کریں جو جابز یا سرچ سے متعلق ہوں اور کوکیز/پرائیویسی نہ ہوں
-                        for a in soup.find_all('a', href=True):
-                            href = a['href']
-                            txt = a.get_text().lower()
-                            
-                            # کوکیز یا پرائیویسی کے لنکس کو سختی سے اگنور کریں
-                            if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq"]):
-                                continue
-
-                            if any(k in href.lower() or k in txt for k in keywords):
-                                if href.startswith('/'):
-                                    job_link = f"https://www.{target_domain}{href}"
-                                elif href.startswith('http'):
-                                    job_link = href
-                                
-                                title_text = a.get_text().strip()
-                                if len(title_text) > 12:
-                                    job_title = title_text[:100]
-                                    break
+                        print(f"-> Searching Domain: {target_domain} | City: {target_city} | Keyword: {keyword}")
                         
-                        if not job_link:
-                            for a in soup.find_all('a', href=True):
-                                href = a['href']
-                                if target_domain in href and not any(bad in href.lower() for bad in ["cookie", "privacy", "terms", "login"]):
-                                    if len(href) > len(f"https://www.{target_domain}") + 5:
-                                        job_link = href if href.startswith('http') else f"https://www.{target_domain}{href}"
-                                        break
+                        # کیوری بیسڈ یو آر ایل جنریٹ کرنا تاکہ یہ سیدھا سرچ رزلٹ پر جائے
+                        search_urls = [
+                            f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
+                            f"https://www.{target_domain}/search?q={keyword}",
+                            f"https://www.{target_domain}"
+                        ]
 
-                        if job_link:
-                            print(f"-> Found Candidate Job Link: {job_link}")
-                            enriched_data = extract_strict_job_details(page, job_link)
-                            
-                            if enriched_data:
-                                cta_parts = []
-                                if enriched_data["salary"] != "Not Specified":
-                                    cta_parts.append(f"Estimated Salary: {enriched_data['salary']}")
-                                if enriched_data["location"]:
-                                    cta_parts.append(f"Location/City: {enriched_data['location']}")
-                                if enriched_data["phone"]:
-                                    cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
-                                if enriched_data["email"]:
-                                    cta_parts.append(f"Email: {enriched_data['email']}")
-                                
-                                cta_parts.append(f"Apply / Direct Job Link: {enriched_data['finalUrl']}")
-                                
-                                final_snippet = enriched_data["snippet"] + "\n\nCall to Action & Direct Details:\n" + "\n".join(cta_parts)
+                        for s_url in search_urls:
+                            if posts_found >= required_posts:
+                                break
+                            try:
+                                page.goto(s_url, timeout=25000, wait_until="domcontentloaded")
+                                time.sleep(4)
 
-                                insert_data = {
-                                    'title': job_title,
-                                    'snippet': final_snippet,
-                                    'link': enriched_data['finalUrl'],
-                                    'country': f"{target_country} ({target_city})",
-                                    'category': "Jobs",
-                                    'query_used': f"Deep search on {target_domain} for {target_city}",
-                                    'status': 'pending',
-                                    'audit_status': None
-                                }
+                                html = page.content()
+                                soup = BeautifulSoup(html, 'html.parser')
 
-                                try:
-                                    supabase.table("zunex").insert(insert_data).execute()
-                                    print(f">>> [SUCCESS] Genuine verified job post inserted for {target_country} ({target_city})!")
-                                    posts_found += 1
-                                    time.sleep(5)
-                                except Exception as db_err:
-                                    print(f"[ERROR] Supabase Insertion Failed: {db_err}")
-                            else:
-                                print(f"[INFO] Link rejected due to lack of genuine job content. Searching further...")
-                        else:
-                            print(f"[INFO] No valid job link matched on portal {target_domain}.")
+                                job_link = None
+                                job_title = f"{keyword.capitalize()} Job in {target_city}, {target_country} ({current_year})"
 
-                    except Exception as inner_e:
-                        print(f"[ERROR] Iteration Exception in City [{target_city}] with Domain [{target_domain}]: {inner_e}")
-                        continue
+                                for a in soup.find_all('a', href=True):
+                                    href = a['href']
+                                    txt = a.get_text().lower()
+                                    
+                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in"]):
+                                        continue
+
+                                    if keyword.lower() in href.lower() or keyword.lower() in txt or "job" in href.lower() or "ilan" in href.lower() or "position" in href.lower():
+                                        if href.startswith('/'):
+                                            job_link = f"https://www.{target_domain}{href}"
+                                        elif href.startswith('http'):
+                                            job_link = href
+                                        
+                                        title_text = a.get_text().strip()
+                                        if len(title_text) > 10:
+                                            job_title = title_text[:100]
+                                            break
+
+                                if job_link:
+                                    print(f"-> Found Job Link: {job_link}")
+                                    enriched_data = extract_strict_job_details(page, job_link)
+                                    
+                                    if enriched_data:
+                                        cta_parts = []
+                                        if enriched_data["salary"] != "Not Specified":
+                                            cta_parts.append(f"Estimated Salary: {enriched_data['salary']}")
+                                        if enriched_data["location"]:
+                                            cta_parts.append(f"Location/City: {enriched_data['location']}")
+                                        if enriched_data["phone"]:
+                                            cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
+                                        if enriched_data["email"]:
+                                            cta_parts.append(f"Email: {enriched_data['email']}")
+                                        
+                                        cta_parts.append(f"Apply / Direct Job Link: {enriched_data['finalUrl']}")
+                                        
+                                        final_snippet = enriched_data["snippet"] + "\n\nCall to Action & Direct Details:\n" + "\n".join(cta_parts)
+
+                                        insert_data = {
+                                            'title': job_title,
+                                            'snippet': final_snippet,
+                                            'link': enriched_data['finalUrl'],
+                                            'country': f"{target_country} ({target_city})",
+                                            'category': "Jobs",
+                                            'query_used': f"Query: {keyword} on {target_domain}",
+                                            'status': 'pending',
+                                            'audit_status': None
+                                        }
+
+                                        try:
+                                            supabase.table("zunex").insert(insert_data).execute()
+                                            print(f">>> [SUCCESS] Verified job post inserted for {target_country} ({target_city}) using query '{keyword}'!")
+                                            posts_found += 1
+                                            break
+                                        except Exception as db_err:
+                                            print(f"[ERROR] Supabase Insertion Failed: {db_err}")
+                            except Exception:
+                                continue
 
             browser.close()
     except Exception as e:
