@@ -242,7 +242,6 @@ def run_independent_crawler():
 
                     print(f"-> Direct Targeting Portal: {target_domain} in City: {target_city}")
                     
-                    # براہِ راست ڈومین کے اپنے ہوم پیج یا سرچ پیج پر جانا (گوگل کو بالکل نکال دیا گیا ہے)
                     direct_portal_url = f"https://www.{target_domain}"
                     
                     try:
@@ -255,12 +254,10 @@ def run_independent_crawler():
                         job_link = None
                         job_title = f"{target_country} - {target_city} Job Opening ({current_year})"
 
-                        # پورٹل کے اندر موجود جاب یا کیریئر لنکس کو ڈھونڈنا
                         for a in soup.find_all('a', href=True):
                             href = a['href']
                             txt = a.get_text().lower()
                             
-                            # ایسے لنکس جن میں جاب، کیریئر یا ویکینسی کا ذکر ہو
                             if any(k in href.lower() or k in txt for k in ["job", "career", "vacancy", "position", "offer", "detail", "einzel"]):
                                 if href.startswith('/'):
                                     job_link = f"https://www.{target_domain}{href}"
@@ -272,7 +269,6 @@ def run_independent_crawler():
                                     job_title = title_text[:100]
                                 break
                         
-                        # اگر براہِ راست لنک نہ ملے تو ہوم پیج کا پہلا بہترین جاب لنک اٹھا لو
                         if not job_link:
                             for a in soup.find_all('a', href=True):
                                 href = a['href']
@@ -311,7 +307,7 @@ def run_independent_crawler():
                                 }
 
                                 try:
-                                    supabase.table("zunex").insert(insert_data).execute()
+                                    supabase.table("Zunex").insert(insert_data).execute()
                                     print(f">>> [SUCCESS] Inserted job post for {target_country} ({target_city}) using {target_domain}!")
                                     posts_found += 1
                                     time.sleep(3)
