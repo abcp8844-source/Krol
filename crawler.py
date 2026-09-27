@@ -19,11 +19,11 @@ USER_AGENTS = [
 def resolve_deep_target_url(page, initial_url, job_title):
     current_url = initial_url
     hops = 0
-    max_hops = 8
+    max_hops = 5
 
     while hops < max_hops:
         try:
-            page.goto(current_url, timeout=30000, wait_until="domcontentloaded")
+            page.goto(current_url, timeout=20000, wait_until="domcontentloaded")
             time.sleep(2)
             current_url = page.url
             html_content = page.content()
@@ -46,14 +46,13 @@ def resolve_deep_target_url(page, initial_url, job_title):
                     hops += 1
                     continue
             break
-        except Exception as e:
-            print(f"Redirect Error: {e}")
+        except Exception:
             break
     return current_url, page
 
 def extract_job_details(page, target_url):
     try:
-        page.goto(target_url, timeout=30000, wait_until="domcontentloaded")
+        page.goto(target_url, timeout=20000, wait_until="domcontentloaded")
         time.sleep(2)
         html_content = page.content()
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -81,22 +80,17 @@ def extract_job_details(page, target_url):
             "location": location,
             "email": email,
             "phone": phone,
-            "snippet": page_text[:400]
+            "snippet": page_text[:400].strip()
         }
-    except Exception as e:
-        print(f"Extraction Error: {e}")
+    except Exception:
         return None
 
 def run_crawler():
-    print("Connecting to Supabase and fetching pending jobs...")
-    response = supabase.table("raw_jobs").select("*").eq("status", "pending").limit(10).execute()
+    response = supabase.table("raw_jobs").select("*").eq("status", "pending").limit(5).execute()
     raw_jobs = response.data
 
     if not raw_jobs:
-        print("No pending jobs found in database.")
         return
-
-    print(f"Found {len(raw_jobs)} pending jobs to process.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -106,16 +100,21 @@ def run_crawler():
         for job in raw_jobs:
             job_id = job.get("id")
             source_link = job.get("source_link")
-            job_title = job.get("title")
+            job_title = job.get("query_used")
 
             if not source_link:
                 continue
 
-            print(f"Processing Job ID: {job_id} | Title: {job_title}")
             resolved_url, page = resolve_deep_target_url(page, source_link, job_title)
             enriched_data = extract_job_details(page, resolved_url)
 
-            if enriched_data:
+            # صرف اس وقت اپڈیٹ کرے گا جب اصلی مواد یا مفید معلومات ہاتھ آئیں گی
+            if enriched_data and (
+                enriched_data["salary"] != "Not Specified" or 
+                enriched_data["email"] != "" or 
+                enriched_data["phone"] != "" or 
+                len(enriched_data["snippet"]) > 100
+            ):
                 supabase.table("raw_jobs").update({
                     "source_link": enriched_data["finalUrl"],
                     "salary": enriched_data["salary"],
@@ -123,9 +122,6 @@ def run_crawler():
                     "snippet": f"Email: {enriched_data['email']} | Phone: {enriched_data['phone']} | {enriched_data['snippet']}",
                     "status": "pendings"
                 }).eq("id", job_id).execute()
-                print(f"Successfully updated Job ID: {job_id} to 'pendings'.")
-            else:
-                print(f"Failed to extract data for Job ID: {job_id}")
 
             time.sleep(2)
 
