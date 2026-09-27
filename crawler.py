@@ -11,9 +11,12 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
 
 try:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("Supabase environment variables (SUPABASE_URL or SUPABASE_KEY) are missing!")
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("-> Supabase connection established successfully.")
 except Exception as e:
-    print(f"Supabase Connection Error: {e}")
+    print(f"[ERROR] Supabase Connection Error: {e}")
     supabase = None
 
 USER_AGENTS = [
@@ -33,47 +36,47 @@ SCHEDULE = {
 }
 
 COUNTRY_CITIES = {
-    "UAE": ["Dubai", "Abu Dhabi", "Sharjah", "Ajman", "Al Ain", "Ras Al Khaimah", "Fujairah", "Umm Al Quwain"],
-    "Saudi Arabia": ["Riyadh", "Jeddah", "Mecca", "Medina", "Dammam", "Khobar", "Tabuk", "Abha", "Jubail", "Taif"],
-    "Qatar": ["Doha", "Al Rayyan", "Al Wakrah", "Al Khor", "Umm Salal", "Mesaieed"],
-    "Bahrain": ["Manama", "Muharraq", "Riffa", "Hamad Town", "Aali", "Sitra"],
-    "Kuwait": ["Kuwait City", "Hawalli", "Salmiya", "Farwaniya", "Jahra", "Ahmadi"],
-    "Oman": ["Muscat", "Salalah", "Sohar", "Nizwa", "Sur", "Barka"],
-    "Japan": ["Tokyo", "Osaka", "Kyoto", "Yokohama", "Nagoya", "Fukuoka", "Sapporo", "Kobe", "Kawasaki", "Hiroshima"],
-    "South Korea": ["Seoul", "Busan", "Incheon", "Daegu", "Daejeon", "Gwangju", "Suwon", "Ulsan"],
-    "China": ["Shanghai", "Beijing", "Shenzhen", "Guangzhou", "Chengdu", "Hangzhou", "Wuhan", "Xi'an", "Nanjing", "Chongqing"],
-    "Taiwan": ["Taipei", "Kaohsiung", "Taichung", "Tainan", "Hsinchu", "Keelung", "Pingtung"],
+    "UAE": ["Dubai", "Abu Dhabi", "Sharjah", "Ajman"],
+    "Saudi Arabia": ["Riyadh", "Jeddah", "Mecca", "Medina"],
+    "Qatar": ["Doha", "Al Rayyan", "Al Wakrah"],
+    "Bahrain": ["Manama", "Muharraq", "Riffa"],
+    "Kuwait": ["Kuwait City", "Hawalli", "Salmiya"],
+    "Oman": ["Muscat", "Salalah", "Sohar"],
+    "Japan": ["Tokyo", "Osaka", "Kyoto", "Yokohama"],
+    "South Korea": ["Seoul", "Busan", "Incheon"],
+    "China": ["Shanghai", "Beijing", "Shenzhen", "Guangzhou"],
+    "Taiwan": ["Taipei", "Kaohsiung", "Taichung"],
     "Singapore": ["Singapore"],
-    "Hong Kong": ["Hong Kong", "Kowloon", "Sha Tin", "Tuen Mun", "Tsuen Wan"],
-    "Thailand": ["Bangkok", "Phuket", "Chiang Mai", "Pattaya", "Hat Yai", "Nonthaburi", "Udon Thani"],
-    "Vietnam": ["Ho Chi Minh City", "Hanoi", "Da Nang", "Hai Phong", "Nha Trang", "Can Tho", "Bien Hoa"],
-    "Malaysia": ["Kuala Lumpur", "Penang", "Johor Bahru", "Ipoh", "Malacca", "Kota Kinabalu", "Shah Alam", "Petaling Jaya"],
-    "Indonesia": ["Jakarta", "Surabaya", "Bandung", "Medan", "Bali", "Semarang", "Palembang", "Makassar"],
-    "Philippines": ["Manila", "Cebu City", "Davao", "Quezon City", "Makati", "Taguig", "Pasig", "Cagayan de Oro"],
-    "Germany": ["Berlin", "Munich", "Frankfurt", "Hamburg", "Cologne", "Stuttgart", "Dusseldorf", "Dortmund", "Essen", "Leipzig"],
-    "France": ["Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes", "Strasbourg", "Montpellier", "Bordeaux", "Lille"],
-    "Netherlands": ["Amsterdam", "Rotterdam", "The Hague", "Utrecht", "Eindhoven", "Tilburg", "Groningen", "Almere"],
-    "Belgium": ["Brussels", "Antwerp", "Ghent", "Bruges", "Liege", "Namur", "Leuven", "Mons"],
-    "Switzerland": ["Zurich", "Geneva", "Basel", "Lausanne", "Bern", "Winterthur", "Lucerne", "St. Gallen"],
-    "Austria": ["Vienna", "Salzburg", "Graz", "Linz", "Innsbruck", "Klagenfurt", "Villach", "Wels"],
-    "UK": ["London", "Manchester", "Birmingham", "Edinburgh", "Glasgow", "Liverpool", "Bristol", "Leeds", "Sheffield", "Cardiff"],
-    "Ireland": ["Dublin", "Cork", "Galway", "Limerick", "Waterford", "Drogheda"],
-    "Sweden": ["Stockholm", "Gothenburg", "Malmo", "Uppsala", "Vasteras", "Orebro", "Linkoping"],
-    "Norway": ["Oslo", "Bergen", "Trondheim", "Stavanger", "Drammen", "Fredrikstad"],
-    "Denmark": ["Copenhagen", "Aarhus", "Odense", "Aalborg", "Esbjerg", "Randers"],
-    "Finland": ["Helsinki", "Espoo", "Tampere", "Vantaa", "Oulu", "Turku", "Jyvaskyla"],
-    "Canada": ["Toronto", "Vancouver", "Montreal", "Calgary", "Edmonton", "Ottawa", "Quebec City", "Winnipeg", "Halifax", "Victoria"],
-    "USA": ["New York", "Los Angeles", "Chicago", "Houston", "Miami", "San Francisco", "Seattle", "Boston", "Dallas", "Atlanta", "Denver", "Phoenix", "San Diego"],
-    "Mexico": ["Mexico City", "Guadalajara", "Monterrey", "Puebla", "Cancun", "Tijuana", "Leon", "Juarez"],
-    "Panama": ["Panama City", "Colon", "David", "Santiago de Veraguas"],
-    "Brazil": ["São Paulo", "Rio de Janeiro", "Brasília", "Salvador", "Fortaleza", "Curitiba", "Belo Horizonte", "Manaus", "Recife"],
-    "Argentina": ["Buenos Aires", "Córdoba", "Rosario", "Mendoza", "La Plata", "Mar del Plata", "Tucuman"],
-    "Italy": ["Rome", "Milan", "Naples", "Turin", "Florence", "Bologna", "Venice", "Palermo", "Genoa", "Bari"],
-    "Turkey": ["Istanbul", "Ankara", "Izmir", "Bursa", "Antalya", "Adana", "Konya", "Gaziantep", "Mersin"],
-    "Azerbaijan": ["Baku", "Ganja", "Sumqayit", "Shusha", "Mingachevir", "Lankaran"],
-    "Georgia": ["Tbilisi", "Batumi", "Kutaisi", "Rustavi", "Zugdidi", "Gori"],
-    "Spain": ["Madrid", "Barcelona", "Valencia", "Seville", "Bilbao", "Malaga", "Zaragoza", "Palma", "Alicante"],
-    "Greece": ["Athens", "Thessaloniki", "Patras", "Heraklion", "Larissa", "Volos", "Rhodes"]
+    "Hong Kong": ["Hong Kong", "Kowloon"],
+    "Thailand": ["Bangkok", "Phuket", "Chiang Mai"],
+    "Vietnam": ["Ho Chi Minh City", "Hanoi", "Da Nang"],
+    "Malaysia": ["Kuala Lumpur", "Penang", "Johor Bahru"],
+    "Indonesia": ["Jakarta", "Surabaya", "Bandung"],
+    "Philippines": ["Manila", "Cebu City", "Davao"],
+    "Germany": ["Berlin", "Munich", "Frankfurt", "Hamburg"],
+    "France": ["Paris", "Lyon", "Marseille", "Toulouse"],
+    "Netherlands": ["Amsterdam", "Rotterdam", "The Hague"],
+    "Belgium": ["Brussels", "Antwerp", "Ghent"],
+    "Switzerland": ["Zurich", "Geneva", "Basel"],
+    "Austria": ["Vienna", "Salzburg", "Graz"],
+    "UK": ["London", "Manchester", "Birmingham", "Edinburgh"],
+    "Ireland": ["Dublin", "Cork", "Galway"],
+    "Sweden": ["Stockholm", "Gothenburg", "Malmo"],
+    "Norway": ["Oslo", "Bergen", "Trondheim"],
+    "Denmark": ["Copenhagen", "Aarhus", "Odense"],
+    "Finland": ["Helsinki", "Espoo", "Tampere"],
+    "Canada": ["Toronto", "Vancouver", "Montreal", "Calgary"],
+    "USA": ["New York", "Los Angeles", "Chicago", "Houston"],
+    "Mexico": ["Mexico City", "Guadalajara", "Monterrey"],
+    "Panama": ["Panama City", "Colon"],
+    "Brazil": ["São Paulo", "Rio de Janeiro", "Brasília"],
+    "Argentina": ["Buenos Aires", "Córdoba", "Rosario"],
+    "Italy": ["Rome", "Milan", "Naples", "Turin"],
+    "Turkey": ["Istanbul", "Ankara", "Izmir"],
+    "Azerbaijan": ["Baku", "Ganja"],
+    "Georgia": ["Tbilisi", "Batumi"],
+    "Spain": ["Madrid", "Barcelona", "Valencia", "Seville", "Bilbao", "Malaga"],
+    "Greece": ["Athens", "Thessaloniki"]
 }
 
 COUNTRY_DUAL_DOMAINS = {
@@ -93,10 +96,10 @@ COUNTRY_DUAL_DOMAINS = {
     "Vietnam": ["vietnamworks.com", "topcv.vn"],
     "Malaysia": ["jobstreet.com.my", "jobsdb.com.my"],
     "Indonesia": ["jobstreet.co.id", "glints.com/id"],
-    "Philippines": ["jobstreet.com.ph", "indeed.com.ph"],
+    "Philippines": ["jobstreet.com.ph", "jobstreet.com.ph"],
     "Germany": ["stepstone.de", "arbeitsagentur.de"],
     "France": ["apec.fr", "welcometothejungle.com"],
-    "Netherlands": ["indeed.nl", "nationalevacaturebank.nl"],
+    "Netherlands": ["nationalevacaturebank.nl", "stepstone.nl"],
     "Belgium": ["stepstone.be", "vdab.be"],
     "Switzerland": ["jobs.ch", "jobup.ch"],
     "Austria": ["karriere.at", "stepstone.at"],
@@ -107,7 +110,7 @@ COUNTRY_DUAL_DOMAINS = {
     "Denmark": ["jobindex.dk", "ofir.dk"],
     "Finland": ["duunitori.fi", "te-palvelut.fi"],
     "Canada": ["jobbank.gc.ca", "eluta.ca"],
-    "USA": ["indeed.com", "ziprecruiter.com"],
+    "USA": ["ziprecruiter.com", "monster.com"],
     "Mexico": ["occ.com.mx", "computrabajo.com.mx"],
     "Panama": ["computrabajo.com.pa", "encuentra24.com"],
     "Brazil": ["catho.com.br", "infojobs.com.br"],
@@ -129,7 +132,7 @@ def clean_text_content(text):
 
 def extract_strict_job_details(page, target_url):
     try:
-        print(f"Checking URL content: {target_url}")
+        print(f"-> Opening Target URL: {target_url}")
         page.goto(target_url, timeout=25000, wait_until="domcontentloaded")
         time.sleep(3)
         
@@ -143,6 +146,7 @@ def extract_strict_job_details(page, target_url):
         page_text = clean_text_content(page_text)
 
         if any(term in page_text.lower() for term in ["cookie policy", "privacy notice", "page not found", "error 404", "job expired", "position filled"]):
+            print(f"[WARNING] Page skipped due to filter match (Cookie/404/Expired) on: {target_url}")
             return None
 
         salary = "Not Specified"
@@ -161,22 +165,20 @@ def extract_strict_job_details(page, target_url):
         phone_match = re.search(r'\+?\d{1,4}?[-.\s]?\(?\d{1,3}?\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}', page_text)
         phone = phone_match.group(0).strip() if phone_match else ""
 
-        if not email and not phone:
-            return None
-
         paragraphs = []
         for p in soup.find_all(['p', 'div', 'li']):
             txt = p.get_text().strip()
-            if len(txt) > 35 and any(k in txt.lower() for k in ["apply", "salary", "requirement", "experience", "qualification", "duty", "responsibility", "benefit", "position"]):
+            if len(txt) > 30 and any(k in txt.lower() for k in ["apply", "salary", "requirement", "experience", "qualification", "duty", "responsibility", "benefit", "position"]):
                 if txt not in paragraphs:
                     paragraphs.append(txt)
 
-        intro_snippet = " ".join(page_text.split()[:90])
+        intro_snippet = " ".join(page_text.split()[:100])
         combined_details = intro_snippet
         if paragraphs:
-            combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:5]])
+            combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:6]])
 
-        if len(combined_details.split()) < 40:
+        if len(combined_details.split()) < 30:
+            print(f"[WARNING] Insufficient text length extracted from: {target_url}")
             return None
 
         return {
@@ -185,39 +187,47 @@ def extract_strict_job_details(page, target_url):
             "location": location,
             "email": email,
             "phone": phone,
-            "snippet": combined_details[:1200]
+            "snippet": combined_details[:1500]
         }
     except Exception as e:
-        print(f"Extraction Error: {e}")
+        print(f"[ERROR] Extraction Error on URL {target_url}: {e}")
         return None
 
 def run_independent_crawler():
     if not supabase:
-        print("Supabase client is not available.")
+        print("[ERROR] Aborting crawler run because Supabase client failed to initialize.")
         return
 
     today = datetime.now().strftime("%A")
     current_year = datetime.now().year
-    day_countries = SCHEDULE.get(today, [])
+    day_countries = SCHEDULE.get(today, ["Spain"])
     
-    if not day_countries:
-        print("No countries scheduled for today.")
-        return
-
     target_country = random.choice(day_countries)
     cities = COUNTRY_CITIES.get(target_country, [target_country])
-    domains = COUNTRY_DUAL_DOMAINS.get(target_country, ["indeed.com", "linkedin.com"])
+    domains = COUNTRY_DUAL_DOMAINS.get(target_country, [])
     
-    print(f"Today: {today} | Target Country: {target_country}")
+    if not domains:
+        print(f"[ERROR] No specific local domains configured for country: {target_country}")
+        return
+
+    print(f"-> Today: {today} | Target Country: {target_country} | Local Domains: {domains}")
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+            try:
+                browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+            except Exception as b_err:
+                print(f"[CRITICAL ERROR] Failed to launch Playwright browser: {b_err}")
+                return
+
+            context = browser.new_context(
+                user_agent=random.choice(USER_AGENTS),
+                viewport={"width": 1280, "height": 800}
+            )
             page = context.new_page()
 
             posts_found = 0
-            required_posts = 2
+            required_posts = 1
             
             shuffled_cities = list(cities)
             random.shuffle(shuffled_cities)
@@ -230,12 +240,12 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    print(f"Searching city: {target_city} | Domain: {target_domain}")
-                    search_keywords = f"job vacancy hiring {target_city} {target_country} {current_year}"
-                    search_url = f"https://www.google.com/search?q=site:{target_domain}+{search_keywords.replace(' ', '+')}&tbs=qdr:w"
+                    print(f"-> Searching City: {target_city} | Portal: {target_domain}")
+                    search_keywords = f"job hiring vacancy {target_city} {target_country} {current_year}"
+                    search_url = f"https://www.google.com/search?q=site:{target_domain}+{search_keywords.replace(' ', '+')}"
                     
                     try:
-                        page.goto(search_url, timeout=30000, wait_until="domcontentloaded")
+                        page.goto(search_url, timeout=25000, wait_until="domcontentloaded")
                         time.sleep(3)
 
                         html = page.content()
@@ -244,17 +254,29 @@ def run_independent_crawler():
                         job_link = None
                         job_title = f"{target_country} - {target_city} Job Opening ({current_year})"
 
-                        for a in soup.find_all('a', href=True):
-                            href = a['href']
-                            if target_domain in href and "http" in href and "google" not in href:
+                        for a in soup.select('div.g a'):
+                            href = a.get('href', '')
+                            if href and href.startswith('http') and target_domain in href and 'google' not in href:
                                 job_link = href
-                                title_tag = a.find('h3')
-                                if title_tag:
-                                    job_title = title_tag.get_text()
+                                title_elem = a.find('h3')
+                                if title_elem:
+                                    job_title = title_elem.get_text()
                                 break
+                        
+                        if not job_link:
+                            for a in soup.find_all('a', href=True):
+                                href = a['href']
+                                if target_domain in href and href.startswith('http') and "google" not in href:
+                                    job_link = href
+                                    title_tag = a.find('h3')
+                                    if title_tag:
+                                        job_title = title_tag.get_text()
+                                    break
 
                         if job_link:
+                            print(f"-> Found Link: {job_link}")
                             enriched_data = extract_strict_job_details(page, job_link)
+                            
                             if enriched_data:
                                 cta_parts = []
                                 if enriched_data["salary"] != "Not Specified":
@@ -281,17 +303,25 @@ def run_independent_crawler():
                                     'created_at': 'now()'
                                 }
 
-                                supabase.table("zunex").insert(insert_data).execute()
-                                print(f"Successfully inserted job post #{posts_found + 1} for {target_country} ({target_city}) using {target_domain}!")
-                                posts_found += 1
-                                time.sleep(2)
+                                try:
+                                    supabase.table("zunex").insert(insert_data).execute()
+                                    print(f">>> [SUCCESS] Inserted job post for {target_country} ({target_city}) using {target_domain}!")
+                                    posts_found += 1
+                                    time.sleep(3)
+                                except Exception as db_err:
+                                    print(f"[ERROR] Supabase Insertion Failed: {db_err}")
+                            else:
+                                print(f"[INFO] Skipping link due to insufficient or invalid content extraction.")
+                        else:
+                            print(f"[INFO] No valid link found for {target_domain} in {target_city}.")
+
                     except Exception as inner_e:
-                        print(f"Iteration Error: {inner_e}")
+                        print(f"[ERROR] Iteration Exception in City [{target_city}] with Domain [{target_domain}]: {inner_e}")
                         continue
 
             browser.close()
     except Exception as e:
-        print(f"Crawler Execution Error: {e}")
+        print(f"[CRITICAL ERROR] Crawler Execution Exception: {e}")
 
 if __name__ == "__main__":
     run_independent_crawler()
