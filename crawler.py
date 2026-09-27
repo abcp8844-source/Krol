@@ -176,9 +176,9 @@ def clean_text_content(text):
 
 def extract_strict_job_details(page, target_url):
     try:
-        print(f"-> Opening Target URL: {target_url}")
-        page.goto(target_url, timeout=25000, wait_until="domcontentloaded")
-        time.sleep(3)
+        print(f"-> Opening Target Job URL for Deep Scan: {target_url}")
+        page.goto(target_url, timeout=30000, wait_until="domcontentloaded")
+        time.sleep(5)  # تسلی سے لوڈ ہونے کا انتظار
         
         html_content = page.content()
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -189,8 +189,15 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        if any(term in page_text.lower() for term in ["cookie policy", "privacy notice", "page not found", "error 404", "job expired", "position filled"]):
-            print(f"[WARNING] Page skipped due to filter match on: {target_url}")
+        # کوکیز، پرائیویسی یا فیل ہونے والے پیجز کو سخت انداز میں مسترد کرنا
+        if any(term in page_text.lower() for term in ["cookie policy", "privacy policy", "legal notice", "page not found", "error 404", "job expired", "position filled", "sign in to view"]):
+            print(f"[WARNING] Page skipped due to generic/cookie filter match on: {target_url}")
+            return None
+
+        # لازمی چیک: کیا یہ واقعی جاب پوسٹ ہے؟ اس میں ریکوائرمنٹ یا ڈیوٹیز کے الفاظ ہونے چاہئیں
+        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante"]
+        if not any(ind in page_text.lower() for ind in job_indicators):
+            print(f"[WARNING] Page does not contain genuine job description indicators: {target_url}")
             return None
 
         salary = "Not Specified"
@@ -216,13 +223,13 @@ def extract_strict_job_details(page, target_url):
                 if txt not in paragraphs:
                     paragraphs.append(txt)
 
-        intro_snippet = " ".join(page_text.split()[:100])
+        intro_snippet = " ".join(page_text.split()[:120])
         combined_details = intro_snippet
         if paragraphs:
-            combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:6]])
+            combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:8]])
 
-        if len(combined_details.split()) < 30:
-            print(f"[WARNING] Insufficient text length extracted from: {target_url}")
+        if len(combined_details.split()) < 40:
+            print(f"[WARNING] Insufficient genuine text length extracted from: {target_url}")
             return None
 
         return {
@@ -231,7 +238,7 @@ def extract_strict_job_details(page, target_url):
             "location": location,
             "email": email,
             "phone": phone,
-            "snippet": combined_details[:1500]
+            "snippet": combined_details[:1800]
         }
     except Exception as e:
         print(f"[ERROR] Extraction Error on URL {target_url}: {e}")
@@ -256,7 +263,6 @@ def run_independent_crawler():
         return
 
     print(f"-> Today: {today} | Target Country: {target_country} | Local Domains: {domains}")
-    print(f"-> Active Keywords Count for {target_country}: {len(keywords)} keywords loaded.")
 
     try:
         with sync_playwright() as p:
@@ -286,13 +292,14 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    print(f"-> Direct Targeting Portal: {target_domain} in City: {target_city}")
+                    print(f"-> Searching Portal: {target_domain} for City: {target_city}")
                     
+                    # اب ہم صرف ہوم پیج کے بجائے سرچ یا جاب سیکشن کا یو آر ایل بنائیں گے تاکہ فضول پیج نہ آئیں
                     direct_portal_url = f"https://www.{target_domain}"
                     
                     try:
-                        page.goto(direct_portal_url, timeout=30000, wait_until="domcontentloaded")
-                        time.sleep(4)
+                        page.goto(direct_portal_url, timeout=35000, wait_until="domcontentloaded")
+                        time.sleep(6)  # تسلی سے پیج کو رینڈر ہونے دیں
 
                         html = page.content()
                         soup = BeautifulSoup(html, 'html.parser')
@@ -300,10 +307,15 @@ def run_independent_crawler():
                         job_link = None
                         job_title = f"{target_country} - {target_city} Job Opening ({current_year})"
 
+                        # ایسے لنکس تلاش کریں جو جابز یا سرچ سے متعلق ہوں اور کوکیز/پرائیویسی نہ ہوں
                         for a in soup.find_all('a', href=True):
                             href = a['href']
                             txt = a.get_text().lower()
                             
+                            # کوکیز یا پرائیویسی کے لنکس کو سختی سے اگنور کریں
+                            if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq"]):
+                                continue
+
                             if any(k in href.lower() or k in txt for k in keywords):
                                 if href.startswith('/'):
                                     job_link = f"https://www.{target_domain}{href}"
@@ -311,19 +323,20 @@ def run_independent_crawler():
                                     job_link = href
                                 
                                 title_text = a.get_text().strip()
-                                if len(title_text) > 10:
+                                if len(title_text) > 12:
                                     job_title = title_text[:100]
-                                break
+                                    break
                         
                         if not job_link:
                             for a in soup.find_all('a', href=True):
                                 href = a['href']
-                                if target_domain in href and len(href) > len(f"https://www.{target_domain}") + 3:
-                                    job_link = href if href.startswith('http') else f"https://www.{target_domain}{href}"
-                                    break
+                                if target_domain in href and not any(bad in href.lower() for bad in ["cookie", "privacy", "terms", "login"]):
+                                    if len(href) > len(f"https://www.{target_domain}") + 5:
+                                        job_link = href if href.startswith('http') else f"https://www.{target_domain}{href}"
+                                        break
 
                         if job_link:
-                            print(f"-> Found Direct Link: {job_link}")
+                            print(f"-> Found Candidate Job Link: {job_link}")
                             enriched_data = extract_strict_job_details(page, job_link)
                             
                             if enriched_data:
@@ -347,22 +360,22 @@ def run_independent_crawler():
                                     'link': enriched_data['finalUrl'],
                                     'country': f"{target_country} ({target_city})",
                                     'category': "Jobs",
-                                    'query_used': f"Direct visit to {target_domain} for {target_city}",
+                                    'query_used': f"Deep search on {target_domain} for {target_city}",
                                     'status': 'pending',
                                     'audit_status': None
                                 }
 
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    print(f">>> [SUCCESS] Inserted job post for {target_country} ({target_city}) using {target_domain}!")
+                                    print(f">>> [SUCCESS] Genuine verified job post inserted for {target_country} ({target_city})!")
                                     posts_found += 1
-                                    time.sleep(3)
+                                    time.sleep(5)
                                 except Exception as db_err:
                                     print(f"[ERROR] Supabase Insertion Failed: {db_err}")
                             else:
-                                print(f"[INFO] Skipping link due to insufficient content extraction.")
+                                print(f"[INFO] Link rejected due to lack of genuine job content. Searching further...")
                         else:
-                            print(f"[INFO] No valid job link found on portal {target_domain}.")
+                            print(f"[INFO] No valid job link matched on portal {target_domain}.")
 
                     except Exception as inner_e:
                         print(f"[ERROR] Iteration Exception in City [{target_city}] with Domain [{target_domain}]: {inner_e}")
