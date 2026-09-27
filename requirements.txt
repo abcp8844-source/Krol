@@ -1,0 +1,4 @@
+supabase
+playwright
+beautifulsoup4
+requests
