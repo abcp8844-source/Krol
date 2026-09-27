@@ -349,11 +349,11 @@ def run_independent_crawler():
                                     'category': "Jobs",
                                     'query_used': f"Direct visit to {target_domain} for {target_city}",
                                     'status': 'pending',
-                                    'created_at': 'now()'
+                                    'audit_status': None
                                 }
 
                                 try:
-                                    supabase.table("Zunex").insert(insert_data).execute()
+                                    supabase.table("zunex").insert(insert_data).execute()
                                     print(f">>> [SUCCESS] Inserted job post for {target_country} ({target_city}) using {target_domain}!")
                                     posts_found += 1
                                     time.sleep(3)
