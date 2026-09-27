@@ -123,6 +123,50 @@ COUNTRY_DUAL_DOMAINS = {
     "Greece": ["kariera.gr", "xe.gr"]
 }
 
+COUNTRY_KEYWORDS = {
+    "UAE": ["job", "career", "vacancy", "position", "وظائف", "emploi"],
+    "Saudi Arabia": ["job", "career", "vacancy", "position", "وظائف", "vancancy"],
+    "Qatar": ["job", "career", "vacancy", "position", "وظائف"],
+    "Bahrain": ["job", "career", "vacancy", "position", "وظائف"],
+    "Kuwait": ["job", "career", "vacancy", "position", "وظائف"],
+    "Oman": ["job", "career", "vacancy", "position", "وظائف"],
+    "Japan": ["job", "career", "vacancy", "position", "求人", "採用", "仕事"],
+    "South Korea": ["job", "career", "vacancy", "position", "채용", "구인", "일자리"],
+    "China": ["job", "career", "vacancy", "position", "招聘", "职位", "工作"],
+    "Taiwan": ["job", "career", "vacancy", "position", "職缺", "工作", "招募"],
+    "Singapore": ["job", "career", "vacancy", "position", "hiring"],
+    "Hong Kong": ["job", "career", "vacancy", "position", "招聘", "職位"],
+    "Thailand": ["job", "career", "vacancy", "position", "งาน", "สมัครงาน"],
+    "Vietnam": ["job", "career", "vacancy", "position", "việc làm", "tuyển dụng"],
+    "Malaysia": ["job", "career", "vacancy", "position", "kerjakososial", "jawatan"],
+    "Indonesia": ["job", "career", "vacancy", "position", "lowongan", "kerja"],
+    "Philippines": ["job", "career", "vacancy", "position", "trabaho", "hiring"],
+    "Germany": ["job", "career", "vacancy", "position", "stelle", "karriere", "ausbildung", "arbeit"],
+    "France": ["job", "career", "vacancy", "position", "emploi", "offre", "poste", "carrière"],
+    "Netherlands": ["job", "career", "vacancy", "position", "vacature", "baan", "werk"],
+    "Belgium": ["job", "career", "vacancy", "position", "vacature", "emploi", "offres"],
+    "Switzerland": ["job", "career", "vacancy", "position", "stelle", "emploi", "lavoro"],
+    "Austria": ["job", "career", "vacancy", "position", "stelle", "karriere", "jobbörse"],
+    "UK": ["job", "career", "vacancy", "position", "employment", "opportunity"],
+    "Ireland": ["job", "career", "vacancy", "position", "employment"],
+    "Sweden": ["job", "career", "vacancy", "position", "jobb", "lediga", "tjänst"],
+    "Norway": ["job", "career", "vacancy", "position", "stilling", "jobb", "karriere"],
+    "Denmark": ["job", "career", "vacancy", "position", "stilling", "ledige", "arbejde"],
+    "Finland": ["job", "career", "vacancy", "position", "työpaikat", "avoimet", "rekrytointi"],
+    "Canada": ["job", "career", "vacancy", "position", "employment", "hiring"],
+    "USA": ["job", "career", "vacancy", "position", "employment", "hiring", "opportunity"],
+    "Mexico": ["job", "career", "vacancy", "position", "empleo", "trabajo", "vacantes"],
+    "Panama": ["job", "career", "vacancy", "position", "empleo", "trabajo", "vacantes"],
+    "Brazil": ["job", "career", "vacancy", "position", "vagas", "emprego", "trabalho"],
+    "Argentina": ["job", "career", "vacancy", "position", "empleo", "trabajo", "busqueda"],
+    "Italy": ["job", "career", "vacancy", "position", "lavoro", "offerta", "impiego", "posizioni"],
+    "Turkey": ["job", "career", "vacancy", "position", "iş", "ilan", "kariyer", "pozisyon", "eleman"],
+    "Azerbaijan": ["job", "career", "vacancy", "position", "iş", "vakansiya", "kadr"],
+    "Georgia": ["job", "career", "vacancy", "position", "vakansia", "samushao", "وظائف"],
+    "Spain": ["job", "career", "vacancy", "position", "empleo", "trabajo", "ofertas", "puesto"],
+    "Greece": ["job", "career", "vacancy", "position", "douleia", "theseis", "karriera", "εργασία", "θέσεις"]
+}
+
 def clean_text_content(text):
     if not text:
         return ""
@@ -205,12 +249,14 @@ def run_independent_crawler():
     target_country = random.choice(day_countries)
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DUAL_DOMAINS.get(target_country, [])
+    keywords = COUNTRY_KEYWORDS.get(target_country, ["job", "career", "vacancy", "position"])
     
     if not domains:
         print(f"[ERROR] No specific local domains configured for country: {target_country}")
         return
 
     print(f"-> Today: {today} | Target Country: {target_country} | Local Domains: {domains}")
+    print(f"-> Active Keywords for {target_country}: {keywords}")
 
     try:
         with sync_playwright() as p:
@@ -258,7 +304,7 @@ def run_independent_crawler():
                             href = a['href']
                             txt = a.get_text().lower()
                             
-                            if any(k in href.lower() or k in txt for k in ["job", "career", "vacancy", "position", "offer", "detail", "einzel"]):
+                            if any(k in href.lower() or k in txt for k in keywords):
                                 if href.startswith('/'):
                                     job_link = f"https://www.{target_domain}{href}"
                                 elif href.startswith('http'):
