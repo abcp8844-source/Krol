@@ -46,7 +46,8 @@ def resolve_deep_target_url(page, initial_url, job_title):
                     hops += 1
                     continue
             break
-        except Exception:
+        except Exception as e:
+            print(f"Error: {e}")
             break
     return current_url, page
 
@@ -68,17 +69,26 @@ def extract_job_details(page, target_url):
         if loc_match:
             location = loc_match.group(2).strip()[:50]
 
+        email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', page_text)
+        email = email_match.group(0) if email_match else ""
+
+        phone_match = re.search(r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', page_text)
+        phone = phone_match.group(0) if phone_match else ""
+
         return {
             "finalUrl": page.url,
             "salary": salary,
             "location": location,
+            "email": email,
+            "phone": phone,
             "snippet": page_text[:400]
         }
-    except Exception:
+    except Exception as e:
+        print(f"Error: {e}")
         return None
 
 def run_crawler():
-    response = supabase.table("raw_jobs").select("*").eq("is_enriched", False).limit(10).execute()
+    response = supabase.table("raw_jobs").select("*").eq("status", "pending").limit(10).execute()
     raw_jobs = response.data
 
     if not raw_jobs:
@@ -105,8 +115,8 @@ def run_crawler():
                     "source_link": enriched_data["finalUrl"],
                     "salary": enriched_data["salary"],
                     "location": enriched_data["location"],
-                    "snippet": enriched_data["snippet"],
-                    "is_enriched": True
+                    "snippet": f"Email: {enriched_data['email']} | Phone: {enriched_data['phone']} | {enriched_data['snippet']}",
+                    "status": "pendings"
                 }).eq("id", job_id).execute()
 
             time.sleep(2)
