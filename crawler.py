@@ -12,7 +12,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SU
 
 try:
     if not SUPABASE_URL or not SUPABASE_KEY:
-        raise ValueError("Supabase environment variables (SUPABASE_URL or SUPABASE_KEY) are missing!")
+        raise ValueError("Supabase environment variables are missing!")
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("-> Supabase connection established successfully.")
 except Exception as e:
@@ -179,8 +179,8 @@ def clean_text_content(text):
 
 def extract_strict_job_details(page, target_url):
     try:
-        page.goto(target_url, timeout=40000, wait_until="domcontentloaded")
-        time.sleep(6) # تسلی کے ساتھ پیج لوڈ ہونے کا انتظار
+        page.goto(target_url, timeout=40000, wait_until="commit")
+        time.sleep(5)
         
         html_content = page.content()
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -191,7 +191,6 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        # سخت ترین فلٹر: اگر ذرا سا بھی فالتو یا پالیسی کا اشارہ ملا تو فوراً ریجیکٹ کرو
         bad_terms = [
             "cookie policy", "privacy policy", "legal notice", "page not found", 
             "error 404", "job expired", "position filled", "sign in to view", 
@@ -199,14 +198,11 @@ def extract_strict_job_details(page, target_url):
             "bank login", "banking system", "customer login"
         ]
         if any(term in page_text.lower() for term in bad_terms):
-            print(f"[REJECTED] Page contains forbidden/cookie/policy terms: {target_url}")
             return None
 
-        # اصل نوکری ہونے کی پکی شرط (کم از کم 4 اہم الفاظ کا ملنا لازمی ہے)
         job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante", "iş ilanı", "mühendis", "position", "candidate", "skills", "benifits"]
         match_count = sum(1 for ind in job_indicators if ind in page_text.lower())
         if match_count < 4:
-            print(f"[REJECTED] Not a real job post (matched indicators: {match_count}): {target_url}")
             return None
 
         salary = "Not Specified"
@@ -238,7 +234,6 @@ def extract_strict_job_details(page, target_url):
             combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:10]])
 
         if len(combined_details.split()) < 70:
-            print(f"[REJECTED] Extracted content is too short or lacks depth: {target_url}")
             return None
 
         return {
@@ -250,7 +245,6 @@ def extract_strict_job_details(page, target_url):
             "snippet": combined_details[:2000]
         }
     except Exception as e:
-        print(f"[ERROR] Exception during details extraction: {e}")
         return None
 
 def run_independent_crawler():
@@ -275,26 +269,36 @@ def run_independent_crawler():
     try:
         with sync_playwright() as p:
             try:
-                browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--ignore-certificate-errors",
+                        "--ignore-certificate-errors-spki-list",
+                        "--allow-insecure-localhost",
+                        "--disable-gpu",
+                        "--no-sandbox"
+                    ]
+                )
             except Exception as b_err:
                 print(f"[CRITICAL ERROR] Failed to launch Playwright browser: {b_err}")
                 return
 
             context = browser.new_context(
                 user_agent=random.choice(USER_AGENTS),
-                viewport={"width": 1280, "height": 800}
+                viewport={"width": 1280, "height": 800},
+                ignore_https_errors=True
             )
             page = context.new_page()
 
             posts_found = 0
-            required_posts = 1 # تسلی سے ایک زبردست پوسٹ ڈھونڈنے کا ہدف
+            required_posts = 1
             
             shuffled_cities = list(cities)
             random.shuffle(shuffled_cities)
             random.shuffle(keywords)
             random.shuffle(domains)
 
-            # گہری اور تسلی بخش تلاش کا لامتناہی سلسلہ (जब तक सही जॉब न मिले, तलाश जारी रहे)
             for target_city in shuffled_cities:
                 if posts_found >= required_posts:
                     break
@@ -319,21 +323,19 @@ def run_independent_crawler():
                             if posts_found >= required_posts:
                                 break
                             try:
-                                page.goto(s_url, timeout=35000, wait_until="domcontentloaded")
-                                time.sleep(6)
+                                page.goto(s_url, timeout=30000, wait_until="commit")
+                                time.sleep(5)
 
                                 html = page.content()
                                 soup = BeautifulSoup(html, 'html.parser')
 
-                                job_link = None
                                 job_title = f"{keyword.capitalize()} Job in {target_city}, {target_country} ({current_year})"
-
                                 candidate_links = []
+                                
                                 for a in soup.find_all('a', href=True):
                                     href = a['href']
                                     txt = a.get_text().lower()
                                     
-                                    # کچرا اور فالتو لنکس کو شروع میں ہی نکال باہر کرو
                                     if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "about", "contact", "bank"]):
                                         continue
 
@@ -349,9 +351,7 @@ def run_independent_crawler():
                                         if len(title_text) > 15 and not any(b in title_text.lower() for b in ["cookie", "privacy", "terms", "about"]):
                                             candidate_links.append((full_link, title_text[:100]))
 
-                                # تمام ملے ہوئے لنکس میں سے ایک ایک کر کے تب تک جانچ کرو جب تک اصلی نوکری نہ مل جائے
                                 for j_link, j_title in candidate_links[:5]:
-                                    print(f"-> Inspecting link deeply: {j_link}")
                                     enriched_data = extract_strict_job_details(page, j_link)
                                     
                                     if enriched_data:
@@ -375,7 +375,7 @@ def run_independent_crawler():
                                             'snippet': final_snippet,
                                             'link': enriched_data['finalUrl'],
                                             'country': f"{target_country} ({target_city})",
-                                            'category': "Jobs",
+                               5             'category': "Jobs",
                                             'query_used': f"Query: {keyword} on {target_domain}",
                                             'status': 'pending',
                                             'audit_status': None
@@ -396,7 +396,6 @@ def run_independent_crawler():
                                     break
 
                             except Exception as ex:
-                                print(f"[DEBUG] Navigation error on {s_url}: {ex}. Trying next option...")
                                 continue
 
             browser.close()
