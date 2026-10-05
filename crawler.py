@@ -375,7 +375,7 @@ def run_independent_crawler():
                                             'snippet': final_snippet,
                                             'link': enriched_data['finalUrl'],
                                             'country': f"{target_country} ({target_city})",
-                               5             'category': "Jobs",
+                                            'category': "Jobs",
                                             'query_used': f"Query: {keyword} on {target_domain}",
                                             'status': 'pending',
                                             'audit_status': None
