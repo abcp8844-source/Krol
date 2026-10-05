@@ -151,4 +151,3 @@ COUNTRY_KEYWORDS = {
     "Spain": ["ingeniero", "desarrollador", "gerente", "comercial"],
     "Greece": ["developer", "manager", "engineer"]
 }
-print("-> [Config] Loaded successfully with secure HTTPS domains.")
