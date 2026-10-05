@@ -22,7 +22,8 @@ except Exception as e:
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0"
 ]
 
 SCHEDULE = {
@@ -80,7 +81,7 @@ COUNTRY_CITIES = {
 }
 
 COUNTRY_DUAL_DOMAINS = {
-    "UAE": ["naukrigulf.com", "dubizzle.ae"],
+    "UAE": ["naukrigulf.com", "dubizzle.ae", "bayt.com"],
     "Saudi Arabia": ["bayt.com", "saudi.tanqeeb.com"],
     "Qatar": ["qatarliving.com", "bayt.com"],
     "Bahrain": ["bayt.com", "bahrain.tanqeeb.com"],
@@ -96,7 +97,7 @@ COUNTRY_DUAL_DOMAINS = {
     "Vietnam": ["vietnamworks.com", "topcv.vn"],
     "Malaysia": ["jobstreet.com.my", "jobsdb.com.my"],
     "Indonesia": ["jobstreet.co.id", "glints.com/id"],
-    "Philippines": ["jobstreet.com.ph", "jobstreet.com.ph"],
+    "Philippines": ["jobstreet.com.ph"],
     "Germany": ["stepstone.de", "arbeitsagentur.de"],
     "France": ["apec.fr", "welcometothejungle.com"],
     "Netherlands": ["nationalevacaturebank.nl", "stepstone.nl"],
@@ -110,7 +111,7 @@ COUNTRY_DUAL_DOMAINS = {
     "Denmark": ["jobindex.dk", "ofir.dk"],
     "Finland": ["duunitori.fi", "te-palvelut.fi"],
     "Canada": ["jobbank.gc.ca", "eluta.ca"],
-    "USA": ["ziprecruiter.com", "monster.com"],
+    "USA": ["ziprecruiter.com", "monster.com", "indeed.com"],
     "Mexico": ["occ.com.mx", "computrabajo.com.mx"],
     "Panama": ["computrabajo.com.pa", "encuentra24.com"],
     "Brazil": ["catho.com.br", "infojobs.com.br"],
@@ -172,13 +173,14 @@ def clean_text_content(text):
         return ""
     cleaned = re.sub(r"(?i)we use cookies.*?(accept|agree|decline|settings)", "", text)
     cleaned = re.sub(r"(?i)privacy policy.*?(rights reserved|cookies)", "", cleaned)
-    cleaned = re.sub(r"(?i)αυτή η ιστοσελίδα χρησιμοποιεί cookies.*?(επιλογή συγκατάθεσης|απαραίτητα cookies)", "", cleaned)
+    cleaned = re.sub(r"(?i)about us.*?(contact us|our team)", "", cleaned)
+    cleaned = re.sub(r"(?i)terms and conditions.*?(copyright|all rights)", "", cleaned)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
 def extract_strict_job_details(page, target_url):
     try:
-        page.goto(target_url, timeout=30000, wait_until="domcontentloaded")
-        time.sleep(4)
+        page.goto(target_url, timeout=40000, wait_until="domcontentloaded")
+        time.sleep(6) # تسلی کے ساتھ پیج لوڈ ہونے کا انتظار
         
         html_content = page.content()
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -189,21 +191,22 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        # سخت فلٹرز: اگر یہ عام صفحات یا کوکی بینرز ہوئے تو فوراً مسترد کر دیں
+        # سخت ترین فلٹر: اگر ذرا سا بھی فالتو یا پالیسی کا اشارہ ملا تو فوراً ریجیکٹ کرو
         bad_terms = [
             "cookie policy", "privacy policy", "legal notice", "page not found", 
-            "error 404", "job expired", "position filled", "sign in to view",
-            "χρησιμοποιεί cookies", "συναίνεση", "επιλογή συγκατάθεσης", "απαραίτητα cookies"
+            "error 404", "job expired", "position filled", "sign in to view", 
+            "terms of use", "about our company", "copyright all rights reserved",
+            "bank login", "banking system", "customer login"
         ]
         if any(term in page_text.lower() for term in bad_terms):
-            print(f"[WARNING] Rejected generic/cookie page: {target_url}")
+            print(f"[REJECTED] Page contains forbidden/cookie/policy terms: {target_url}")
             return None
 
-        # اصل جاب کے ہونے کی لازمی شرط (کم از کم دو اشارے موجود ہوں)
-        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante", "iş ilanı", "mühendis", "θέσεις εργασίας", "απαραίτητα"]
+        # اصل نوکری ہونے کی پکی شرط (کم از کم 4 اہم الفاظ کا ملنا لازمی ہے)
+        job_indicators = ["requirements", "experience", "qualification", "responsibilities", "duties", "salary", "apply", "puesto", "empleo", "vacante", "iş ilanı", "mühendis", "position", "candidate", "skills", "benifits"]
         match_count = sum(1 for ind in job_indicators if ind in page_text.lower())
-        if match_count < 2:
-            print(f"[WARNING] Page lacks valid job indicators (Matched: {match_count}): {target_url}")
+        if match_count < 4:
+            print(f"[REJECTED] Not a real job post (matched indicators: {match_count}): {target_url}")
             return None
 
         salary = "Not Specified"
@@ -211,8 +214,8 @@ def extract_strict_job_details(page, target_url):
         if salary_match:
             salary = salary_match.group(0).strip()
 
-        location = "Local / On-site"
-        loc_match = re.search(r'(?:Location|City|Address|Area|Τοποθεσία):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
+        location = "On-site"
+        loc_match = re.search(r'(?:Location|City|Address|Area):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
         if loc_match:
             location = loc_match.group(1).strip()[:50]
 
@@ -225,17 +228,17 @@ def extract_strict_job_details(page, target_url):
         paragraphs = []
         for p in soup.find_all(['p', 'div', 'li']):
             txt = p.get_text().strip()
-            if len(txt) > 40 and any(k in txt.lower() for k in ["apply", "salary", "requirement", "experience", "qualification", "duty", "responsibility", "benefit", "position", "προσόντα", "αρμοδιότητες"]):
+            if len(txt) > 50 and any(k in txt.lower() for k in ["apply", "salary", "requirement", "experience", "qualification", "duty", "responsibility", "benefit", "position", "skills"]):
                 if txt not in paragraphs:
                     paragraphs.append(txt)
 
-        intro_snippet = " ".join(page_text.split()[:150])
+        intro_snippet = " ".join(page_text.split()[:200])
         combined_details = intro_snippet
         if paragraphs:
-            combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:8]])
+            combined_details += "\n\nKey Job Description & Requirements:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:10]])
 
-        if len(combined_details.split()) < 40:
-            print(f"[WARNING] Extracted content is too short: {target_url}")
+        if len(combined_details.split()) < 70:
+            print(f"[REJECTED] Extracted content is too short or lacks depth: {target_url}")
             return None
 
         return {
@@ -244,7 +247,7 @@ def extract_strict_job_details(page, target_url):
             "location": location,
             "email": email,
             "phone": phone,
-            "snippet": combined_details[:1800]
+            "snippet": combined_details[:2000]
         }
     except Exception as e:
         print(f"[ERROR] Exception during details extraction: {e}")
@@ -284,12 +287,14 @@ def run_independent_crawler():
             page = context.new_page()
 
             posts_found = 0
-            required_posts = 1
+            required_posts = 1 # تسلی سے ایک زبردست پوسٹ ڈھونڈنے کا ہدف
             
             shuffled_cities = list(cities)
             random.shuffle(shuffled_cities)
             random.shuffle(keywords)
+            random.shuffle(domains)
 
+            # گہری اور تسلی بخش تلاش کا لامتناہی سلسلہ (जब तक सही जॉब न मिले, तलाश जारी रहे)
             for target_city in shuffled_cities:
                 if posts_found >= required_posts:
                     break
@@ -298,11 +303,11 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    for keyword in keywords[:3]: 
+                    for keyword in keywords: 
                         if posts_found >= required_posts:
                             break
 
-                        print(f"-> Searching Domain: {target_domain} | City: {target_city} | Keyword: {keyword}")
+                        print(f"\n[DEEP SEARCH] Exploring Domain: {target_domain} | City: {target_city} | Keyword: {keyword}")
                         
                         search_urls = [
                             f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
@@ -314,8 +319,8 @@ def run_independent_crawler():
                             if posts_found >= required_posts:
                                 break
                             try:
-                                page.goto(s_url, timeout=30000, wait_until="domcontentloaded")
-                                time.sleep(5)
+                                page.goto(s_url, timeout=35000, wait_until="domcontentloaded")
+                                time.sleep(6)
 
                                 html = page.content()
                                 soup = BeautifulSoup(html, 'html.parser')
@@ -323,29 +328,34 @@ def run_independent_crawler():
                                 job_link = None
                                 job_title = f"{keyword.capitalize()} Job in {target_city}, {target_country} ({current_year})"
 
+                                candidate_links = []
                                 for a in soup.find_all('a', href=True):
                                     href = a['href']
                                     txt = a.get_text().lower()
                                     
-                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "συναίνεση"]):
+                                    # کچرا اور فالتو لنکس کو شروع میں ہی نکال باہر کرو
+                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "about", "contact", "bank"]):
                                         continue
 
-                                    if keyword.lower() in href.lower() or keyword.lower() in txt or "job" in href.lower() or "ilan" in href.lower() or "position" in href.lower() or "εξατομίκευση" in txt:
+                                    if any(term in href.lower() or term in txt for term in [keyword.lower(), "job", "career", "vacancy", "position", "ilan", "emploi"]):
                                         if href.startswith('/'):
-                                            job_link = f"https://www.{target_domain}{href}"
+                                            full_link = f"https://www.{target_domain}{href}"
                                         elif href.startswith('http'):
-                                            job_link = href
+                                            full_link = href
+                                        else:
+                                            continue
                                         
                                         title_text = a.get_text().strip()
-                                        if len(title_text) > 15 and not any(b in title_text.lower() for b in ["cookie", "privacy", "όροι"]):
-                                            job_title = title_text[:100]
-                                            break
+                                        if len(title_text) > 15 and not any(b in title_text.lower() for b in ["cookie", "privacy", "terms", "about"]):
+                                            candidate_links.append((full_link, title_text[:100]))
 
-                                if job_link:
-                                    print(f"-> Checking Potential Job Link: {job_link}")
-                                    enriched_data = extract_strict_job_details(page, job_link)
+                                # تمام ملے ہوئے لنکس میں سے ایک ایک کر کے تب تک جانچ کرو جب تک اصلی نوکری نہ مل جائے
+                                for j_link, j_title in candidate_links[:5]:
+                                    print(f"-> Inspecting link deeply: {j_link}")
+                                    enriched_data = extract_strict_job_details(page, j_link)
                                     
                                     if enriched_data:
+                                        job_title = j_title if j_title else job_title
                                         cta_parts = []
                                         if enriched_data["salary"] != "Not Specified":
                                             cta_parts.append(f"Estimated Salary: {enriched_data['salary']}")
@@ -373,13 +383,20 @@ def run_independent_crawler():
 
                                         try:
                                             supabase.table("zunex").insert(insert_data).execute()
-                                            print(f">>> [SUCCESS] Verified job post inserted for {target_country} ({target_city}) using query '{keyword}'!")
+                                            print(f">>> [SUCCESS] 100% Verified Job Inserted for {target_country} ({target_city})!")
                                             posts_found += 1
                                             break
                                         except Exception as db_err:
                                             print(f"[ERROR] Supabase Insertion Failed: {db_err}")
+                                    
+                                    if posts_found >= required_posts:
+                                        break
+                                
+                                if posts_found >= required_posts:
+                                    break
+
                             except Exception as ex:
-                                print(f"[DEBUG] Error navigating URL {s_url}: {ex}")
+                                print(f"[DEBUG] Navigation error on {s_url}: {ex}. Trying next option...")
                                 continue
 
             browser.close()
