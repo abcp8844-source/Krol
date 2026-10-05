@@ -1,4 +1,3 @@
-# scraper.py
 import time
 import random
 from datetime import datetime
@@ -10,16 +9,13 @@ from cleaner import extract_strict_job_details
 
 try:
     if not SUPABASE_URL or not SUPABASE_KEY:
-        raise ValueError("Supabase environment variables are missing!")
+        raise ValueError("Supabase environment variables missing")
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    print("-> [Supabase] Connected successfully.")
-except Exception as e:
-    print(f"[ERROR] Supabase Connection Error: {e}")
+except Exception:
     supabase = None
 
 def run_independent_crawler():
     if not supabase:
-        print("[ERROR] Aborting crawler run: Supabase client is missing.")
         return
 
     today = datetime.now().strftime("%A")
@@ -34,8 +30,6 @@ def run_independent_crawler():
     if not domains:
         return
 
-    print(f"-> Today: {today} | Target Country: {target_country} | Domains: {domains}")
-
     try:
         with sync_playwright() as p:
             try:
@@ -49,8 +43,7 @@ def run_independent_crawler():
                         "--disable-dev-shm-usage"
                     ]
                 )
-            except Exception as b_err:
-                print(f"[CRITICAL ERROR] Failed to launch browser: {b_err}")
+            except Exception:
                 return
 
             context = browser.new_context(
@@ -65,8 +58,8 @@ def run_independent_crawler():
             
             shuffled_cities = list(cities)
             random.shuffle(shuffled_cities)
-            random.shuffle(keywords)
             random.shuffle(domains)
+            random.shuffle(keywords)
 
             for target_city in shuffled_cities:
                 if posts_found >= required_posts:
@@ -76,13 +69,10 @@ def run_independent_crawler():
                     if posts_found >= required_posts:
                         break
 
-                    for keyword in keywords: 
+                    for keyword in keywords:
                         if posts_found >= required_posts:
                             break
-
-                        print(f"\n[DEEP SEARCH] Domain: {target_domain} | City: {target_city} | Keyword: {keyword}")
                         
-                        # Secure HTTPS Search URLs construction
                         search_urls = [
                             f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
                             f"https://www.{target_domain}/search?q={keyword}",
@@ -94,7 +84,7 @@ def run_independent_crawler():
                                 break
                             try:
                                 page.goto(s_url, timeout=35000, wait_until="domcontentloaded")
-                                time.sleep(4)
+                                time.sleep(3)
 
                                 html = page.content()
                                 soup = BeautifulSoup(html, 'html.parser')
@@ -106,8 +96,7 @@ def run_independent_crawler():
                                     href = a['href']
                                     txt = a.get_text().lower()
                                     
-                                    # Skip garbage / footer links
-                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "about", "contact", "profile"]):
+                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in"]):
                                         continue
 
                                     if any(term in href.lower() or term in txt for term in [keyword.lower(), "job", "career", "vacancy", "position", "ilan"]):
@@ -119,14 +108,14 @@ def run_independent_crawler():
                                             continue
                                         
                                         title_text = a.get_text().strip()
-                                        if len(title_text) > 10:
+                                        if len(title_text) > 5:
                                             candidate_links.append((full_link, title_text[:100]))
 
-                                for j_link, j_title in candidate_links[:4]:
+                                for j_link, j_title in candidate_links[:5]:
                                     enriched_data = extract_strict_job_details(page, j_link)
                                     
                                     if enriched_data:
-                                        job_title = j_title if j_title and len(j_title) > 10 else default_title
+                                        job_title = j_title if j_title and len(j_title) > 5 else default_title
                                         cta_parts = []
                                         if enriched_data["salary"] != "Not Specified":
                                             cta_parts.append(f"Estimated Salary: {enriched_data['salary']}")
@@ -137,9 +126,9 @@ def run_independent_crawler():
                                         if enriched_data["email"]:
                                             cta_parts.append(f"Email: {enriched_data['email']}")
                                         
-                                        cta_parts.append(f"Apply / Direct Job Link: {enriched_data['finalUrl']}")
+                                        cta_parts.append(f"Direct Job Link: {enriched_data['finalUrl']}")
                                         
-                                        final_snippet = enriched_data["snippet"] + "\n\nCall to Action & Direct Details:\n" + "\n".join(cta_parts)
+                                        final_snippet = enriched_data["snippet"] + "\n\nDetails:\n" + "\n".join(cta_parts)
 
                                         insert_data = {
                                             'title': job_title,
@@ -154,11 +143,10 @@ def run_independent_crawler():
 
                                         try:
                                             supabase.table("zunex").insert(insert_data).execute()
-                                            print(f">>> [SUCCESS] 100% Clean Verified Job Inserted for {target_country} ({target_city})!")
                                             posts_found += 1
                                             break
-                                        except Exception as db_err:
-                                            print(f"[ERROR] Supabase Insertion Failed: {db_err}")
+                                        except Exception:
+                                            pass
                                     
                                     if posts_found >= required_posts:
                                         break
@@ -166,10 +154,9 @@ def run_independent_crawler():
                                 if posts_found >= required_posts:
                                     break
 
-                            except Exception as ex:
+                            except Exception:
                                 continue
 
             browser.close()
-    except Exception as e:
-        print(f"[CRITICAL ERROR] Crawler Exception: {e}")
-print("-> [Scraper Engine] Secure crawler module loaded.")
+    except Exception:
+        pass
