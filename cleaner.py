@@ -1,5 +1,4 @@
 import re
-import time
 from bs4 import BeautifulSoup
 
 def clean_text_content(text):
@@ -12,12 +11,12 @@ def clean_text_content(text):
     cleaned = re.sub(r"(?i)create your jobseeker profile.*?(upload cv|sign up)", "", cleaned)
     return re.sub(r'\s+', ' ', cleaned).strip()
 
-def extract_strict_job_details(page, target_url):
+def extract_strict_job_details(driver, target_url):
     try:
-        page.goto(target_url, timeout=45000, wait_until="domcontentloaded")
-        time.sleep(3)
+        driver.get(target_url)
+        driver.implicitly_wait(6)
         
-        html_content = page.content()
+        html_content = driver.page_source
         soup = BeautifulSoup(html_content, 'html.parser')
         
         for element in soup(["script", "style", "nav", "footer", "header", "aside", "form", "iframe", "button", "noscript"]):
@@ -26,7 +25,11 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        junk_indicators = ["ordenar por", "relevancia", "resultados de búsqueda", "¿te avisamos si hay nuevas ofertas?", "filtrar por", "empleos y trabajo", "candidatos", "iniciar sesión"]
+        junk_indicators = [
+            "ordenar por", "relevancia", "resultados de búsqueda", "¿te avisamos si hay nuevas ofertas?", 
+            "filtrar por", "empleos y trabajo", "candidatos", "iniciar sesión", "cookies", 
+            "aviso legal", "política de privacidad", "inicia sesión con tu cuenta"
+        ]
         if any(j in page_text.lower() for j in junk_indicators):
             return None
 
@@ -51,7 +54,7 @@ def extract_strict_job_details(page, target_url):
         paragraphs = []
         for p in soup.find_all(['p', 'div', 'li']):
             txt = p.get_text().strip()
-            if len(txt) > 30 and txt not in paragraphs:
+            if len(txt) > 35 and txt not in paragraphs:
                 paragraphs.append(txt)
 
         intro_snippet = " ".join(page_text.split()[:250])
@@ -59,16 +62,17 @@ def extract_strict_job_details(page, target_url):
         if paragraphs:
             combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:12]])
 
-        if len(combined_details.split()) < 35:
+        if len(combined_details.split()) < 40:
             return None
 
         return {
-            "finalUrl": page.url,
+            "finalUrl": driver.current_url,
             "salary": salary,
             "location": location,
             "email": email,
             "phone": phone,
             "snippet": combined_details[:2000]
         }
-    except Exception:
+    except Exception as e:
+        print(f"[CLEANER ERROR] {e}")
         return None
