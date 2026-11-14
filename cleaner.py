@@ -26,15 +26,20 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
+        # چیک کریں کہ آیا یہ کوئی لسٹنگ یا سرچ پیج تو نہیں (اگر ہاں، تو فوراً ریجیکٹ کرو)
+        junk_indicators = ["ordenar por", "relevancia", "resultados de búsqueda", "¿te avisamos si hay nuevas ofertas?", "filtrar por", "empleos y trabajo"]
+        if any(j in page_text.lower() for j in junk_indicators):
+            return None
+
         salary = "Not Specified"
-        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$|₺|€)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
+        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$|₺|€|B/\.)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
         if salary_match:
             sal_text = salary_match.group(0).strip()
             if "0.00" not in sal_text:
                 salary = sal_text
 
         location = "On-site"
-        loc_match = re.search(r'(?:Location|City|Address|Area):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
+        loc_match = re.search(r'(?:Location|City|Address|Area|Ubicación):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
         if loc_match:
             location = loc_match.group(1).strip()[:50]
 
@@ -47,15 +52,15 @@ def extract_strict_job_details(page, target_url):
         paragraphs = []
         for p in soup.find_all(['p', 'div', 'li']):
             txt = p.get_text().strip()
-            if len(txt) > 20 and txt not in paragraphs:
+            if len(txt) > 30 and txt not in paragraphs:
                 paragraphs.append(txt)
 
-        intro_snippet = " ".join(page_text.split()[:200])
+        intro_snippet = " ".join(page_text.split()[:250])
         combined_details = intro_snippet
         if paragraphs:
-            combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:10]])
+            combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:12]])
 
-        if len(combined_details.split()) < 15:
+        if len(combined_details.split()) < 30:
             return None
 
         return {
