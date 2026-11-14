@@ -75,7 +75,8 @@ def run_independent_crawler():
                         
                         search_urls = [
                             f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
-                            f"https://www.{target_domain}/search?q={keyword}"
+                            f"https://www.{target_domain}/search?q={keyword}",
+                            f"https://www.{target_domain}"
                         ]
 
                         for s_url in search_urls:
@@ -95,11 +96,9 @@ def run_independent_crawler():
                                     href = a['href']
                                     txt = a.get_text().lower()
                                     
-                                    # سخت فلٹر: سرچ، فلٹرز، لاگ ان، کوکیز اور مین ہوم پیج کو فوراً مسترد کرو
                                     if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "order", "sort", "filter", "search?"]):
                                         continue
 
-                                    # صرف وہی لنکس اٹھاؤ جو باقاعدہ جاب ڈیٹیل یا ایمپلائمنٹ پاتھ پر ہوں
                                     if any(term in href.lower() for term in ["/trabajo-", "/job/", "/vacante/", "/position/", "/ofr/", "/offer/", "/emploi/"]):
                                         if href.startswith('/'):
                                             full_link = f"https://www.{target_domain}{href}"
@@ -112,7 +111,10 @@ def run_independent_crawler():
                                         if len(title_text) > 10:
                                             candidate_links.append((full_link, title_text[:100]))
 
-                                for j_link, j_title in candidate_links[:5]:
+                                for j_link, j_title in candidate_links:
+                                    if posts_found >= required_posts:
+                                        break
+
                                     enriched_data = extract_strict_job_details(page, j_link)
                                     
                                     if enriched_data:
@@ -148,9 +150,6 @@ def run_independent_crawler():
                                             break
                                         except Exception:
                                             pass
-                                    
-                                    if posts_found >= required_posts:
-                                        break
                                 
                                 if posts_found >= required_posts:
                                     break
