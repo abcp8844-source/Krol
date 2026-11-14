@@ -64,7 +64,7 @@ def extract_strict_job_details(driver, target_url):
         paragraphs = []
         for p in soup.find_all(['p', 'div', 'li']):
             txt = p.get_text().strip()
-            if len(txt) > 35 and txt not in paragraphs:
+            if len(txt) > 60 and txt not in paragraphs:
                 paragraphs.append(txt)
 
         intro_snippet = " ".join(page_text.split()[:250])
@@ -72,7 +72,7 @@ def extract_strict_job_details(driver, target_url):
         if paragraphs:
             combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:12]])
 
-        if len(combined_details.split()) < 40:
+        if len(combined_details.split()) < 100:
             return None
 
         return {
