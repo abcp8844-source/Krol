@@ -75,8 +75,7 @@ def run_independent_crawler():
                         
                         search_urls = [
                             f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
-                            f"https://www.{target_domain}/search?q={keyword}",
-                            f"https://www.{target_domain}"
+                            f"https://www.{target_domain}/search?q={keyword}"
                         ]
 
                         for s_url in search_urls:
@@ -96,10 +95,12 @@ def run_independent_crawler():
                                     href = a['href']
                                     txt = a.get_text().lower()
                                     
-                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in"]):
+                                    # سخت فلٹر: سرچ، فلٹرز، لاگ ان، کوکیز اور مین ہوم پیج کو فوراً مسترد کرو
+                                    if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "order", "sort", "filter", "search?"]):
                                         continue
 
-                                    if any(term in href.lower() or term in txt for term in [keyword.lower(), "job", "career", "vacancy", "position", "ilan"]):
+                                    # صرف وہی لنکس اٹھاؤ جو باقاعدہ جاب ڈیٹیل یا ایمپلائمنٹ پاتھ پر ہوں
+                                    if any(term in href.lower() for term in ["/trabajo-", "/job/", "/vacante/", "/position/", "/ofr/", "/offer/", "/emploi/"]):
                                         if href.startswith('/'):
                                             full_link = f"https://www.{target_domain}{href}"
                                         elif href.startswith('http'):
@@ -108,7 +109,7 @@ def run_independent_crawler():
                                             continue
                                         
                                         title_text = a.get_text().strip()
-                                        if len(title_text) > 5:
+                                        if len(title_text) > 10:
                                             candidate_links.append((full_link, title_text[:100]))
 
                                 for j_link, j_title in candidate_links[:5]:
