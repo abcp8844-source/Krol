@@ -25,6 +25,16 @@ def extract_strict_job_details(driver, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
+        # کلاؤڈ فلائر، سکیورٹی وال اور بوٹ بلاکنگ پیجز کو فوراً پکڑ کر ریجیکٹ کرنے کا سخت چیک
+        bot_block_indicators = [
+            "cloudflare", "additional verification required", "ray id", "access denied", 
+            "checking your browser", "enable javascript and cookies", "security check", 
+            "automated access", "captcha", "robot", "return home"
+        ]
+        if any(b in page_text.lower() for b in bot_block_indicators):
+            print(f"[BLOCKED] Cloudflare or Anti-Bot challenge detected on: {target_url}")
+            return None
+
         junk_indicators = [
             "ordenar por", "relevancia", "resultados de búsqueda", "¿te avisamos si hay nuevas ofertas?", 
             "filtrar por", "empleos y trabajo", "candidatos", "iniciar sesión", "cookies", 
