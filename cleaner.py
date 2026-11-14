@@ -1,153 +1,70 @@
-import os
+import re
+import time
+from bs4 import BeautifulSoup
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+def clean_text_content(text):
+    if not text:
+        return ""
+    cleaned = re.sub(r"(?i)we use cookies.*?(accept|agree|decline|settings)", "", text)
+    cleaned = re.sub(r"(?i)privacy policy.*?(rights reserved|cookies)", "", cleaned)
+    cleaned = re.sub(r"(?i)about us.*?(contact us|our team)", "", cleaned)
+    cleaned = re.sub(r"(?i)terms and conditions.*?(copyright|all rights)", "", cleaned)
+    cleaned = re.sub(r"(?i)create your jobseeker profile.*?(upload cv|sign up)", "", cleaned)
+    return re.sub(r'\s+', ' ', cleaned).strip()
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"
-]
+def extract_strict_job_details(page, target_url):
+    try:
+        page.goto(target_url, timeout=45000, wait_until="domcontentloaded")
+        time.sleep(3)
+        
+        html_content = page.content()
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        for element in soup(["script", "style", "nav", "footer", "header", "aside", "form", "iframe", "button", "noscript"]):
+            element.decompose()
+            
+        page_text = soup.get_text(separator=" ")
+        page_text = clean_text_content(page_text)
 
-SCHEDULE = {
-    "Monday": ["UAE", "Saudi Arabia", "Qatar", "Bahrain", "Kuwait", "Oman"],
-    "Tuesday": ["Japan", "South Korea", "China", "Taiwan", "Singapore", "Hong Kong"],
-    "Wednesday": ["Thailand", "Vietnam", "Malaysia", "Indonesia", "Philippines", "Singapore"],
-    "Thursday": ["Germany", "France", "Netherlands", "Belgium", "Switzerland", "Austria"],
-    "Friday": ["UK", "Ireland", "Sweden", "Norway", "Denmark", "Finland"],
-    "Saturday": ["Canada", "USA", "Mexico", "Panama", "Brazil", "Argentina"],
-    "Sunday": ["Italy", "Turkey", "Azerbaijan", "Georgia", "Spain", "Greece"]
-}
+        salary = "Not Specified"
+        salary_match = re.search(r'(?:salary|pay|wage|compensation|USD|EUR|AED|QAR|SAR|SGD|\$|₺|€)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*', page_text, re.IGNORECASE)
+        if salary_match:
+            sal_text = salary_match.group(0).strip()
+            if "0.00" not in sal_text:
+                salary = sal_text
 
-COUNTRY_CITIES = {
-    "UAE": ["Dubai", "Abu Dhabi", "Sharjah"],
-    "Saudi Arabia": ["Riyadh", "Jeddah"],
-    "Qatar": ["Doha"],
-    "Bahrain": ["Manama"],
-    "Kuwait": ["Kuwait City"],
-    "Oman": ["Muscat"],
-    "Japan": ["Tokyo", "Osaka"],
-    "South Korea": ["Seoul"],
-    "China": ["Shanghai", "Beijing"],
-    "Taiwan": ["Taipei"],
-    "Singapore": ["Singapore"],
-    "Hong Kong": ["Hong Kong"],
-    "Thailand": ["Bangkok", "Phuket"],
-    "Vietnam": ["Ho Chi Minh City", "Hanoi"],
-    "Malaysia": ["Kuala Lumpur"],
-    "Indonesia": ["Jakarta"],
-    "Philippines": ["Manila"],
-    "Germany": ["Berlin", "Munich", "Frankfurt"],
-    "France": ["Paris", "Lyon"],
-    "Netherlands": ["Amsterdam"],
-    "Belgium": ["Brussels"],
-    "Switzerland": ["Zurich"],
-    "Austria": ["Vienna"],
-    "UK": ["London", "Manchester", "Birmingham"],
-    "Ireland": ["Dublin"],
-    "Sweden": ["Stockholm"],
-    "Norway": ["Oslo"],
-    "Denmark": ["Copenhagen"],
-    "Finland": ["Helsinki"],
-    "Canada": ["Toronto", "Vancouver"],
-    "USA": ["New York", "Los Angeles", "Chicago"],
-    "Mexico": ["Mexico City"],
-    "Panama": ["Panama City"],
-    "Brazil": ["São Paulo", "Rio de Janeiro"],
-    "Argentina": ["Buenos Aires"],
-    "Italy": ["Rome", "Milan"],
-    "Turkey": ["Istanbul", "Ankara", "Izmir"],
-    "Azerbaijan": ["Baku"],
-    "Georgia": ["Tbilisi"],
-    "Spain": ["Madrid", "Barcelona", "Valencia"],
-    "Greece": ["Athens"]
-}
+        location = "On-site"
+        loc_match = re.search(r'(?:Location|City|Address|Area):\s*([A-Za-z\s,]+)', page_text, re.IGNORECASE)
+        if loc_match:
+            location = loc_match.group(1).strip()[:50]
 
-COUNTRY_DUAL_DOMAINS = {
-    "UAE": ["naukrigulf.com", "dubizzle.ae", "bayt.com"],
-    "Saudi Arabia": ["bayt.com", "saudi.tanqeeb.com"],
-    "Qatar": ["qatarliving.com", "bayt.com"],
-    "Bahrain": ["bayt.com", "bahrain.tanqeeb.com"],
-    "Kuwait": ["bayt.com", "kuwait.tanqeeb.com"],
-    "Oman": ["bayt.com", "oman.tanqeeb.com"],
-    "Japan": ["daijob.com", "tokyodev.com"],
-    "South Korea": ["worknet.go.kr", "saramin.co.kr"],
-    "China": ["zhaopin.com", "51job.com"],
-    "Taiwan": ["104.com.tw", "1111.com.tw"],
-    "Singapore": ["jobstreet.com.sg", "jobsbank.gov.sg"],
-    "Hong Kong": ["jobsdb.com.hk", "ctgoodjobs.hk"],
-    "Thailand": ["jobthai.com", "jobsdb.com"],
-    "Vietnam": ["vietnamworks.com", "topcv.vn"],
-    "Malaysia": ["jobstreet.com.my", "jobsdb.com"],
-    "Indonesia": ["jobstreet.co.id", "glints.com"],
-    "Philippines": ["jobstreet.com.ph"],
-    "Germany": ["stepstone.de", "arbeitsagentur.de"],
-    "France": ["apec.fr", "welcometothejungle.com"],
-    "Netherlands": ["nationalevacaturebank.nl", "stepstone.nl"],
-    "Belgium": ["stepstone.be", "vdab.be"],
-    "Switzerland": ["jobs.ch", "jobup.ch"],
-    "Austria": ["karriere.at", "stepstone.at"],
-    "UK": ["reed.co.uk", "cv-library.co.uk"],
-    "Ireland": ["irishjobs.ie", "jobs.ie"],
-    "Sweden": ["arbetsformedlingen.se", "blocket.se"],
-    "Norway": ["finn.no", "nav.no"],
-    "Denmark": ["jobindex.dk", "ofir.dk"],
-    "Finland": ["duunitori.fi", "te-palvelut.fi"],
-    "Canada": ["jobbank.gc.ca", "eluta.ca"],
-    "USA": ["ziprecruiter.com", "monster.com", "indeed.com"],
-    "Mexico": ["occ.com.mx", "computrabajo.com.mx"],
-    "Panama": ["computrabajo.com.pa", "encuentra24.com"],
-    "Brazil": ["catho.com.br", "infojobs.com.br"],
-    "Argentina": ["computrabajo.com.ar", "zonajobs.com.ar"],
-    "Italy": ["infojobs.it", "monster.it"],
-    "Turkey": ["kariyer.net", "yenibiris.com"],
-    "Azerbaijan": ["boss.az", "jobsearch.az"],
-    "Georgia": ["hr.ge", "jobs.ge"],
-    "Spain": ["infojobs.net", "empleo.gob.es"],
-    "Greece": ["kariera.gr", "xe.gr"]
-}
+        email_match = re.search(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', page_text)
+        email = email_match.group(0) if email_match else ""
 
-COUNTRY_KEYWORDS = {
-    "UAE": ["engineer", "manager", "developer", "sales", "accountant", "nurse", "driver", "technician"],
-    "Saudi Arabia": ["engineer", "manager", "developer", "sales", "accountant", "nurse", "driver"],
-    "Qatar": ["engineer", "manager", "developer", "sales", "accountant", "hospitality"],
-    "Bahrain": ["engineer", "manager", "sales", "accountant"],
-    "Kuwait": ["engineer", "manager", "sales", "accountant"],
-    "Oman": ["engineer", "manager", "sales", "accountant"],
-    "Japan": ["engineer", "developer", "sales", "manager"],
-    "South Korea": ["engineer", "developer", "manager"],
-    "China": ["engineer", "developer", "manager", "sales"],
-    "Taiwan": ["engineer", "developer", "manager"],
-    "Singapore": ["engineer", "manager", "developer", "analyst"],
-    "Hong Kong": ["manager", "developer", "analyst", "sales"],
-    "Thailand": ["manager", "engineer", "sales", "hotel"],
-    "Vietnam": ["developer", "engineer", "manager"],
-    "Malaysia": ["engineer", "manager", "developer", "sales"],
-    "Indonesia": ["engineer", "manager", "sales"],
-    "Philippines": ["agent", "nurse", "manager", "developer"],
-    "Germany": ["developer", "engineer", "manager", "consultant"],
-    "France": ["développeur", "ingénieur", "manager"],
-    "Netherlands": ["developer", "engineer", "manager"],
-    "Belgium": ["developer", "engineer", "manager"],
-    "Switzerland": ["engineer", "developer", "manager"],
-    "Austria": ["developer", "engineer", "manager"],
-    "UK": ["developer", "manager", "engineer", "analyst"],
-    "Ireland": ["developer", "manager", "engineer"],
-    "Sweden": ["developer", "engineer", "manager"],
-    "Norway": ["developer", "engineer", "manager"],
-    "Denmark": ["developer", "engineer", "manager"],
-    "Finland": ["developer", "engineer", "manager"],
-    "Canada": ["developer", "manager", "engineer", "analyst"],
-    "USA": ["developer", "manager", "engineer", "analyst", "specialist"],
-    "Mexico": ["gerente", "ingeniero", "desarrollador", "ventas"],
-    "Panama": ["gerente", "ingeniero", "ventas"],
-    "Brazil": ["gerente", "engenheiro", "desenvolvedor"],
-    "Argentina": ["gerente", "ingeniero", "analista"],
-    "Italy": ["sviluppatore", "ingegnere", "manager"],
-    "Turkey": ["mühendis", "uzman", "yönetici", "developer"],
-    "Azerbaijan": ["mühəndis", "menecer", "satış"],
-    "Georgia": ["manager", "developer", "engineer"],
-    "Spain": ["ingeniero", "desarrollador", "gerente", "comercial"],
-    "Greece": ["developer", "manager", "engineer"]
-}
+        phone_match = re.search(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}\b', page_text)
+        phone = phone_match.group(0).strip() if phone_match else ""
+
+        paragraphs = []
+        for p in soup.find_all(['p', 'div', 'li']):
+            txt = p.get_text().strip()
+            if len(txt) > 20 and txt not in paragraphs:
+                paragraphs.append(txt)
+
+        intro_snippet = " ".join(page_text.split()[:200])
+        combined_details = intro_snippet
+        if paragraphs:
+            combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:10]])
+
+        if len(combined_details.split()) < 15:
+            return None
+
+        return {
+            "finalUrl": page.url,
+            "salary": salary,
+            "location": location,
+            "email": email,
+            "phone": phone,
+            "snippet": combined_details[:2000]
+        }
+    except Exception:
+        return None
