@@ -35,7 +35,7 @@ def run_independent_crawler():
         print(f"[ERROR] No domains found for country: {target_country}")
         return
 
-    print(f"[START] Advanced Selenium Crawler Targeting Country: {target_country}")
+    print(f"[START] Robust Selenium Crawler Targeting Country: {target_country}")
 
     options = Options()
     options.add_argument("--headless=new")
@@ -74,7 +74,9 @@ def run_independent_crawler():
                     
                     search_urls = [
                         f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
-                        f"https://www.{target_domain}/search?q={keyword}"
+                        f"https://www.{target_domain}/search?q={keyword}",
+                        f"https://www.{target_domain}/vagas-{keyword}",
+                        f"https://www.{target_domain}"
                     ]
 
                     for s_url in search_urls:
@@ -83,7 +85,7 @@ def run_independent_crawler():
                         try:
                             print(f"[NAVIGATING] Visiting search URL: {s_url}")
                             driver.get(s_url)
-                            time.sleep(5)
+                            time.sleep(6)
 
                             soup = BeautifulSoup(driver.page_source, 'html.parser')
                             default_title = f"{keyword.capitalize()} Job in {target_city}, {target_country} ({current_year})"
@@ -93,24 +95,23 @@ def run_independent_crawler():
                                 href = a['href']
                                 txt = a.get_text().lower()
                                 
-                                if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "order", "sort", "filter", "search?", "help", "aviso"]):
+                                if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "order", "sort", "filter", "search?", "help", "aviso", "forgot", "download"]):
                                     continue
 
-                                if any(term in href.lower() for term in ["/trabajo-", "/job/", "/vacante/", "/position/", "/ofr/", "/offer/", "/emploi/"]):
-                                    if href.startswith('/'):
-                                        full_link = f"https://www.{target_domain}{href}"
-                                    elif href.startswith('http'):
-                                        full_link = href
-                                    else:
-                                        continue
-                                    
-                                    title_text = a.get_text().strip()
-                                    if len(title_text) > 8:
-                                        candidate_links.append((full_link, title_text[:100]))
+                                if href.startswith('/'):
+                                    full_link = f"https://www.{target_domain}{href}"
+                                elif href.startswith('http'):
+                                    full_link = href
+                                else:
+                                    continue
+                                
+                                title_text = a.get_text().strip()
+                                if len(title_text) > 8:
+                                    candidate_links.append((full_link, title_text[:100]))
 
-                            print(f"[FOUND] {len(candidate_links)} strict candidate links on {target_domain}")
+                            print(f"[FOUND] {len(candidate_links)} flexible candidate links on {target_domain}")
 
-                            for j_link, j_title in candidate_links:
+                            for j_link, j_title in candidate_links[:15]:
                                 if posts_found >= required_posts:
                                     break
 
