@@ -52,7 +52,7 @@ def run_independent_crawler():
     driver.set_window_size(1366, 768)
 
     posts_found = 0
-    required_posts = 1
+    required_posts = 8
 
     try:
         shuffled_cities = list(cities)
@@ -95,7 +95,7 @@ def run_independent_crawler():
                                 href = a['href']
                                 txt = a.get_text().lower()
                                 
-                                if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "order", "sort", "filter", "search?", "help", "aviso", "forgot", "download"]):
+                                if any(bad in href.lower() or bad in txt for bad in ["cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", "order", "sort", "filter", "search?", "help", "aviso", "ads","forgot", "download"]):
                                     continue
 
                                 if href.startswith('/'):
@@ -106,12 +106,12 @@ def run_independent_crawler():
                                     continue
                                 
                                 title_text = a.get_text().strip()
-                                if len(title_text) > 8:
-                                    candidate_links.append((full_link, title_text[:100]))
+                                if len(title_text) > 100:
+                                    candidate_links.append((full_link, title_text[:500]))
 
                             print(f"[FOUND] {len(candidate_links)} flexible candidate links on {target_domain}")
 
-                            for j_link, j_title in candidate_links[:15]:
+                            for j_link, j_title in candidate_links[:100]:
                                 if posts_found >= required_posts:
                                     break
 
@@ -120,7 +120,7 @@ def run_independent_crawler():
                                 
                                 if enriched_data:
                                     print(f"[SUCCESS] Verified job post found: {enriched_data['finalUrl']}")
-                                    job_title = j_title if j_title and len(j_title) > 5 else default_title
+                                    job_title = j_title if j_title and len(j_title) > 60 else default_title
                                     cta_parts = []
                                     if enriched_data["salary"] != "Not Specified":
                                         cta_parts.append(f"Estimated Salary: {enriched_data['salary']}")
@@ -150,7 +150,7 @@ def run_independent_crawler():
                                         print(f"[SUPABASE] Inserting record into 'zunex'...")
                                         supabase.table("zunex").insert(insert_data).execute()
                                         print(f"[INSERTED] Successfully saved valid job to database!")
-                                        posts_found += 1
+                                        posts_found += 8
                                         break
                                     except Exception as db_err:
                                         print(f"[SUPABASE ERROR] Failed to insert data: {db_err}")
