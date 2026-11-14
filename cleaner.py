@@ -26,8 +26,7 @@ def extract_strict_job_details(page, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        # چیک کریں کہ آیا یہ کوئی لسٹنگ یا سرچ پیج تو نہیں (اگر ہاں، تو فوراً ریجیکٹ کرو)
-        junk_indicators = ["ordenar por", "relevancia", "resultados de búsqueda", "¿te avisamos si hay nuevas ofertas?", "filtrar por", "empleos y trabajo"]
+        junk_indicators = ["ordenar por", "relevancia", "resultados de búsqueda", "¿te avisamos si hay nuevas ofertas?", "filtrar por", "empleos y trabajo", "candidatos", "iniciar sesión"]
         if any(j in page_text.lower() for j in junk_indicators):
             return None
 
@@ -60,7 +59,7 @@ def extract_strict_job_details(page, target_url):
         if paragraphs:
             combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:12]])
 
-        if len(combined_details.split()) < 30:
+        if len(combined_details.split()) < 35:
             return None
 
         return {
