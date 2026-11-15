@@ -2,6 +2,7 @@ import os
 import json
 import logging
 from google import genai
+from google.genai import types
 from supabase import create_client
 
 logging.basicConfig(
