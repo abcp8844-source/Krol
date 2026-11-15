@@ -129,8 +129,8 @@ def run_cleaner():
             }
             supabase.table("zunex").update(update_payload).eq("id", post_id).execute()
             print(f"[RESULT] SUCCESS! Cleaned, translated to pure English, and audit_status set to success (original status preserved).")
-            print(f"[BEFORE]: {old_snippet[:300]}...")
-            print(f"[AFTER]:  {new_snippet[:300]}...")
+            print(f"[BEFORE]: {old_snippet[:500]}...")
+            print(f"[AFTER]:  {new_snippet[:500]}...")
 
         processed_count += 1
         time.sleep(5)
