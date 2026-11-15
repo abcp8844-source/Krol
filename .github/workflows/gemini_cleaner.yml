@@ -1,4 +1,4 @@
-name: Zunex Gemini Cleaner Bot
+name: Gemini Cleaner
 
 on:
   schedule:
