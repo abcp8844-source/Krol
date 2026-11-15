@@ -25,14 +25,12 @@ def extract_strict_job_details(driver, target_url):
         page_text = soup.get_text(separator=" ")
         page_text = clean_text_content(page_text)
 
-        # کلاؤڈ فلائر، سکیورٹی وال اور بوٹ بلاکنگ پیجز کو فوراً پکڑ کر ریجیکٹ کرنے کا سخت چیک
         bot_block_indicators = [
             "cloudflare", "additional verification required", "ray id", "access denied", 
             "checking your browser", "enable javascript and cookies", "security check", 
             "automated access", "captcha", "robot", "return home"
         ]
         if any(b in page_text.lower() for b in bot_block_indicators):
-            print(f"[BLOCKED] Cloudflare or Anti-Bot challenge detected on: {target_url}")
             return None
 
         junk_indicators = [
@@ -67,13 +65,16 @@ def extract_strict_job_details(driver, target_url):
             if len(txt) > 60 and txt not in paragraphs:
                 paragraphs.append(txt)
 
-        intro_snippet = " ".join(page_text.split()[:250])
+        intro_snippet = " ".join(page_text.split()[:350])
         combined_details = intro_snippet
         if paragraphs:
-            combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:12]])
+            combined_details += "\n\nJob Description & Details:\n" + "\n".join([f"- {pr}" for pr in paragraphs[:20]])
 
-        if len(combined_details.split()) < 100:
+        words = combined_details.split()
+        if len(words) < 400:
             return None
+        
+        final_snippet = " ".join(words[:800])
 
         return {
             "finalUrl": driver.current_url,
@@ -81,7 +82,7 @@ def extract_strict_job_details(driver, target_url):
             "location": location,
             "email": email,
             "phone": phone,
-            "snippet": combined_details[:2000]
+            "snippet": final_snippet
         }
     except Exception as e:
         print(f"[CLEANER ERROR] {e}")
