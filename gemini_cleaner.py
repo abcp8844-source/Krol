@@ -96,4 +96,78 @@ def process_raw_posts():
                 model='gemini-3.5-flash-lite',
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    response
+                    response_mime_type="application/json"
+                )
+            )
+            
+            result = json.loads(gemini_response.text)
+
+            is_valid = result.get("is_valid")
+            listings = result.get("listings", [])
+
+            if is_valid and listings and isinstance(listings, list):
+                # First listing updates the original pending row to 'success'
+                first_item = listings[0]
+                first_update_data = {
+                    "title": first_item.get("title"),
+                    "category": first_item.get("category"),
+                    "country": first_item.get("country"),
+                    "city": first_item.get("city", "Not Specified"),
+                    "salary": first_item.get("salary", "Not Specified"),
+                    "email": first_item.get("email", ""),
+                    "phone": first_item.get("phone", ""),
+                    "snippet": first_item.get("snippet"),
+                    "status": "success"
+                }
+
+                try:
+                    supabase.table("zunex").update(first_update_data).eq("id", post_id).execute()
+                    logging.info(f"SUCCESS (Original Updated): Post ID {post_id} updated with status 'success' | Title: {first_item.get('title')}")
+                    success_count += 1
+
+                    # If multiple listings were found inside the same snippet, insert them as new rows with status 'success'
+                    for extra_item in listings[1:]:
+                        extra_insert_data = {
+                            "title": extra_item.get("title"),
+                            "category": extra_item.get("category"),
+                            "country": extra_item.get("country"),
+                            "city": extra_item.get("city", "Not Specified"),
+                            "salary": extra_item.get("salary", "Not Specified"),
+                            "email": extra_item.get("email", ""),
+                            "phone": extra_item.get("phone", ""),
+                            "snippet": extra_item.get("snippet"),
+                            "finalUrl": url,
+                            "status": "success"
+                        }
+                        supabase.table("zunex").insert(extra_insert_data).execute()
+                        logging.info(f"SUCCESS (Extra Row Inserted): Split listing added with status 'success' | Title: {extra_item.get('title')}")
+                        success_count += 1
+
+                except Exception as db_err:
+                    logging.error(f"DATABASE ERROR updating/inserting listings for post ID {post_id}: {db_err}")
+                    error_count += 1
+            else:
+                # If invalid or useless, update status to 'rejected' directly in zunex
+                logging.info(f"REJECTED: Post ID {post_id} marked invalid.")
+                rejected_count += 1
+                try:
+                    supabase.table("zunex").update({"status": "rejected"}).eq("id", post_id).execute()
+                    logging.info(f"STATUS UPDATE: Post ID {post_id} status updated to 'rejected' in 'zunex'.")
+                except Exception as update_err:
+                    logging.error(f"Failed to update status to 'rejected' for post ID {post_id}: {update_err}")
+
+        except json.JSONDecodeError as json_err:
+            logging.error(f"JSON PARSE ERROR for post ID {post_id} ({url}): {json_err}.")
+            error_count += 1
+            try:
+                supabase.table("zunex").update({"status": "error_parse"}).eq("id", post_id).execute()
+            except Exception:
+                pass
+        except Exception as e:
+            logging.error(f"CRITICAL ERROR processing post ID {post_id} ({url}): {e}")
+            error_count += 1
+
+    logging.info(f"Execution Summary -> Total Processed: {len(posts)} | Successful: {success_count} | Rejected: {rejected_count} | Errors: {error_count}")
+
+if __name__ == "__main__":
+    process_raw_posts()
