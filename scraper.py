@@ -48,14 +48,10 @@ def run_independent_crawler():
 
     today = datetime.now().strftime("%A")
     current_year = datetime.now().year
-    day_countries = SCHEDULE.get(today, ["Spain"])
     
-    target_country = random.choice(day_countries)
-    cities = COUNTRY_CITIES.get(target_country, [target_country])
-    domains = COUNTRY_DOMAINS.get(target_country, [])
-    country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"]})
-
-    if not domains:
+    # Fully relies on config.py schedule, no hardcoded fake countries
+    day_countries = SCHEDULE.get(today, [])
+    if not day_countries:
         return
 
     options = Options()
@@ -72,7 +68,6 @@ def run_independent_crawler():
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     driver.set_window_size(1366, 768)
 
-    post_inserted = False
     blocked_url_terms = [
         "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", 
         "order", "sort", "filter", "search?", "help", "aviso", "ads", "forgot", "download",
@@ -80,36 +75,34 @@ def run_independent_crawler():
     ]
 
     try:
-        while not post_inserted:
+        shuffled_countries = list(day_countries)
+        random.shuffle(shuffled_countries)
+
+        for target_country in shuffled_countries:
+            cities = COUNTRY_CITIES.get(target_country, [target_country])
+            domains = COUNTRY_DOMAINS.get(target_country, [])
+            country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"]})
+
+            if not domains:
+                continue
+
             shuffled_cities = list(cities)
             random.shuffle(shuffled_cities)
 
             for target_city in shuffled_cities:
-                if post_inserted:
-                    break
-
                 shuffled_domains = list(domains)
 
                 for target_domain in shuffled_domains:
-                    if post_inserted:
-                        break
-
                     categories = ["Jobs", "Visa", "Travel"]
                     random.shuffle(categories)
 
                     for category in categories:
-                        if post_inserted:
-                            break
-
                         if isinstance(country_kw_dict, dict):
                             keywords = list(country_kw_dict.get(category, ["apply now"]))
                         else:
                             keywords = list(country_kw_dict)
 
                         for keyword in keywords:
-                            if post_inserted:
-                                break
-
                             search_urls = [
                                 f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
                                 f"https://www.{target_domain}/search?q={keyword}",
@@ -118,8 +111,6 @@ def run_independent_crawler():
                             ]
 
                             for s_url in search_urls:
-                                if post_inserted:
-                                    break
                                 try:
                                     driver.get(s_url)
                                     time.sleep(5)
@@ -149,9 +140,6 @@ def run_independent_crawler():
                                             candidate_links.append((full_link, title_text))
 
                                     for j_link, j_title in candidate_links[:30]:
-                                        if post_inserted:
-                                            break
-
                                         if is_already_scraped(j_link):
                                             continue
 
@@ -196,21 +184,19 @@ def run_independent_crawler():
                                             }
 
                                             try:
+                                                # Insert one post immediately
                                                 supabase.table("zunex").insert(insert_data).execute()
-                                                post_inserted = True
-                                                break
+                                                
+                                                # Take a 5 seconds break after inserting one post as requested
+                                                time.sleep(5)
+                                                
+                                                # Return/Break to process next systematically one by one
+                                                return 
                                             except Exception:
                                                 pass
 
                                 except Exception:
                                     continue
-
-            if not post_inserted:
-                target_country = random.choice(day_countries)
-                cities = COUNTRY_CITIES.get(target_country, [target_country])
-                domains = COUNTRY_DOMAINS.get(target_country, [])
-                country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {})
-                time.sleep(5)
 
     except Exception:
         pass
