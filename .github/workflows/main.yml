@@ -1,4 +1,4 @@
-name: Zunex Deep Crawler Bot
+name:  Crawler Bot
 
 on:
   schedule:
