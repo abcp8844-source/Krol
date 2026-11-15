@@ -1,5 +1,3 @@
-supabase
-playwright
+seleniumbase
 beautifulsoup4
-requests
-selenium
+supabase
