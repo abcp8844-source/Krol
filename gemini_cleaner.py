@@ -1,173 +1,141 @@
-import os
 import json
-import logging
+import os
+import time
+from datetime import datetime, timezone
 from google import genai
 from google.genai import types
 from supabase import create_client
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+supabase = create_client(supabase_url, supabase_key) if supabase_url and supabase_key else None
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+raw_api_key = os.environ.get("GEMINI_API_KEY")
+gemini_api_key = raw_api_key.strip() if raw_api_key else None
+gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
-if not SUPABASE_URL or not SUPABASE_KEY or not GEMINI_API_KEY:
-    logging.error("Missing environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or GEMINI_API_KEY.")
-    exit(1)
-
-try:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    client = genai.Client(api_key=GEMINI_API_KEY)
-except Exception as e:
-    logging.critical(f"Failed to initialize Supabase or Gemini clients: {e}")
-    exit(1)
-
-def process_raw_posts():
-    logging.info("Starting Gemini Cleaner: processing 'zunex' table in-place using gemini-3.5-flash-lite...")
+def clean_snippet_with_gemini(old_title, old_snippet):
+    prompt = f"""
+    You are an elite data cleaner, quality gatekeeper, and professional translator for Job, Visa, and Travel portals.
     
+    Current Title: {old_title}
+    Current Snippet: {old_snippet}
+
+    STRICT OPERATIONAL RULES:
+    1. **STRICT REJECTION (Newspapers, War Stories & Useless Junk):**
+       - If the content is a general newspaper article, news report, political commentary, irrelevant war story, trade war report, economic overview, fabricated story, or non-informative text without direct, actionable job vacancies, official visa application guides, or travel/tour booking details, return `null` for the snippet.
+       - If it is pure cookie notices, privacy policies, terms of use, login pages, banners, or unidentifiable gibberish, return `null`.
+    2. **CLEANING & PURE ENGLISH TRANSLATION:**
+       - If the post contains valid job, travel, or visa-related information mixed with extraneous elements (cookies, banners, policy text, platform boilerplate, or foreign languages), surgically remove all clutter.
+       - You MUST translate all remaining valid informative content into pure, fluent, professional English and present it beautifully and clearly. Never leave foreign text in the output.
+    3. **PRESERVATION OF VALUABLE FACTS:**
+       - Keep core details intact: job descriptions, responsibilities, requirements, salaries, contact emails/phones, application links, official visa requirements, and travel itineraries.
+       - Never invent fake data. Only clean, translate, and polish the real facts present.
+
+    OUTPUT FORMAT: Return strictly a valid JSON object with a single key: "snippet". If the post is useless, a newspaper article, or an irrelevant story, return {{"snippet": null}}.
+    """
+
+    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+
+    for model_name in models_to_try:
+        try:
+            response = gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.0,
+                ),
+            )
+            if response and response.text:
+                data = json.loads(response.text.strip())
+                return data.get("snippet")
+        except Exception as e:
+            print(f"[WARNING] Model {model_name} failed: {str(e)}. Trying fallback...")
+            continue
+
+    return "API_ERROR"
+
+def run_cleaner():
+    if not supabase or not gemini_client:
+        print("[CRITICAL ERROR] Environment variables missing.")
+        return
+
+    print("[INFO] Starting strict cleaner & translator batch for up to 10 posts with null audit_status in 'zunex'...")
+
     try:
-        response = supabase.table("zunex").select("*").eq("status", "pending").execute()
-        posts = response.data
+        res = (
+            supabase.table("zunex")
+            .select("id, title, snippet, audit_status, status")
+            .is_("audit_status", "null")
+            .order("updated_at", desc=False)
+            .limit(10)
+            .execute()
+        )
+        posts = res.data if res else []
     except Exception as e:
-        logging.error(f"Database error while fetching pending posts from 'zunex': {e}")
+        print(f"[DATABASE ERROR] Failed to fetch posts: {str(e)}")
         return
 
     if not posts:
-        logging.info("No pending posts found in 'zunex' table.")
+        print("[INFO] No posts found with null audit_status in 'zunex'. Exiting.")
         return
 
-    logging.info(f"Found {len(posts)} pending posts to inspect and process.")
-
-    success_count = 0
-    rejected_count = 0
-    error_count = 0
+    processed_count = 0
 
     for post in posts:
         post_id = post.get("id")
-        url = post.get("finalUrl", "Unknown URL")
-        raw_text = post.get("snippet", "")
-        
-        logging.info(f"Processing post ID: {post_id} | URL: {url}")
+        old_title = post.get("title", "")
+        old_snippet = post.get("snippet", "")
 
-        if not raw_text:
-            logging.warning(f"Post ID {post_id} has empty snippet. Marking as 'rejected'.")
-            try:
-                supabase.table("zunex").update({"status": "rejected"}).eq("id", post_id).execute()
-            except Exception as db_err:
-                logging.error(f"Failed to update empty post ID {post_id}: {db_err}")
-            error_count += 1
+        print(f"\n----------------------------------------")
+        print(f"[INFO] Processing Post ID: {post_id}")
+        print(f"[TITLE]: {old_title}")
+
+        current_timestamp = datetime.now(timezone.utc).isoformat()
+
+        if not old_snippet:
+            update_payload = {
+                "snippet": None,
+                "status": "success",
+                "audit_status": "success",
+                "updated_at": current_timestamp
+            }
+            supabase.table("zunex").update(update_payload).eq("id", post_id).execute()
+            print(f"[RESULT] Snippet was empty. status and audit_status set to success.")
+            processed_count += 1
             continue
 
-        prompt = f"""
-        You are a strict data cleaner, translator, and structured extractor. Your task is to process the raw scraped text below.
+        new_snippet = clean_snippet_with_gemini(old_title, old_snippet)
 
-        CRITICAL RULES - NO REWRITING OR HALLUCINATION:
-        1. Do NOT invent, rewrite, or add any information from your own imagination. 
-        2. Strictly use ONLY the facts, details, numbers, and text present in the source snippet below. 
-        3. Translate the existing content accurately into professional, clean ENGLISH. 
-        4. Remove only site navigation noise, repeated menu fragments, cookie notices, or ads, but preserve all original job/visa/travel details faithfully.
+        if new_snippet == "API_ERROR":
+            print(f"[WARNING] API error or Quota exceeded encountered for Post ID {post_id}. Skipping modification.")
+            continue
 
-        The system handles THREE categories: "Jobs", "Visa", and "Travel". Determine the correct category based strictly on the text.
+        if new_snippet is None or str(new_snippet).strip() == "":
+            update_payload = {
+                "snippet": None,
+                "status": "success",
+                "audit_status": "success",
+                "updated_at": current_timestamp
+            }
+            supabase.table("zunex").update(update_payload).eq("id", post_id).execute()
+            print(f"[RESULT] REJECTED! Identified as newspaper, irrelevant war story, or useless junk. Snippet cleared, status set to success, and audit_status set to success.")
+        else:
+            update_payload = {
+                "snippet": new_snippet,
+                "audit_status": "success",
+                "updated_at": current_timestamp
+            }
+            supabase.table("zunex").update(update_payload).eq("id", post_id).execute()
+            print(f"[RESULT] SUCCESS! Cleaned, translated to pure English, and audit_status set to success (original status preserved).")
+            print(f"[BEFORE]: {old_snippet[:300]}...")
+            print(f"[AFTER]:  {new_snippet[:300]}...")
 
-        If the text contains multiple distinct listings, extract each one separately into the "listings" array. If the text is completely vague or junk, set "is_valid": false.
+        processed_count += 1
+        time.sleep(5)
 
-        Return a JSON object strictly with these keys:
-        - "is_valid": true or false
-        - "listings": array of objects (if valid), where each object contains:
-            - "title": string (Translated title from the text)
-            - "category": string (Strictly "Jobs", "Visa", or "Travel")
-            - "country": string (Target country found in text, in English)
-            - "city": string (Target city if available, otherwise "Not Specified")
-            - "salary": string (Salary/fee details if available, otherwise "Not Specified")
-            - "email": string (Contact email if found, otherwise empty string)
-            - "phone": string (Contact phone if found, otherwise empty string)
-            - "snippet": string (Cleaned, strictly faithful English translation of the original text details without any added fluff)
-
-        Raw Scraped Text to Clean and Translate:
-        {raw_text}
-        """
-
-        try:
-            gemini_response = client.models.generate_content(
-                model='gemini-3.5-flash-lite',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
-            )
-            
-            result = json.loads(gemini_response.text)
-
-            is_valid = result.get("is_valid")
-            listings = result.get("listings", [])
-
-            if is_valid and listings and isinstance(listings, list):
-                # First listing updates the original pending row to 'success'
-                first_item = listings[0]
-                first_update_data = {
-                    "title": first_item.get("title"),
-                    "category": first_item.get("category"),
-                    "country": first_item.get("country"),
-                    "city": first_item.get("city", "Not Specified"),
-                    "salary": first_item.get("salary", "Not Specified"),
-                    "email": first_item.get("email", ""),
-                    "phone": first_item.get("phone", ""),
-                    "snippet": first_item.get("snippet"),
-                    "status": "success"
-                }
-
-                try:
-                    supabase.table("zunex").update(first_update_data).eq("id", post_id).execute()
-                    logging.info(f"SUCCESS (Original Updated): Post ID {post_id} updated with status 'success' | Title: {first_item.get('title')}")
-                    success_count += 1
-
-                    # If multiple listings were found inside the same snippet, insert them as new rows with status 'success'
-                    for extra_item in listings[1:]:
-                        extra_insert_data = {
-                            "title": extra_item.get("title"),
-                            "category": extra_item.get("category"),
-                            "country": extra_item.get("country"),
-                            "city": extra_item.get("city", "Not Specified"),
-                            "salary": extra_item.get("salary", "Not Specified"),
-                            "email": extra_item.get("email", ""),
-                            "phone": extra_item.get("phone", ""),
-                            "snippet": extra_item.get("snippet"),
-                            "finalUrl": url,
-                            "status": "success"
-                        }
-                        supabase.table("zunex").insert(extra_insert_data).execute()
-                        logging.info(f"SUCCESS (Extra Row Inserted): Split listing added with status 'success' | Title: {extra_item.get('title')}")
-                        success_count += 1
-
-                except Exception as db_err:
-                    logging.error(f"DATABASE ERROR updating/inserting listings for post ID {post_id}: {db_err}")
-                    error_count += 1
-            else:
-                # If invalid or useless, update status to 'rejected' directly in zunex
-                logging.info(f"REJECTED: Post ID {post_id} marked invalid.")
-                rejected_count += 1
-                try:
-                    supabase.table("zunex").update({"status": "rejected"}).eq("id", post_id).execute()
-                    logging.info(f"STATUS UPDATE: Post ID {post_id} status updated to 'rejected' in 'zunex'.")
-                except Exception as update_err:
-                    logging.error(f"Failed to update status to 'rejected' for post ID {post_id}: {update_err}")
-
-        except json.JSONDecodeError as json_err:
-            logging.error(f"JSON PARSE ERROR for post ID {post_id} ({url}): {json_err}.")
-            error_count += 1
-            try:
-                supabase.table("zunex").update({"status": "error_parse"}).eq("id", post_id).execute()
-            except Exception:
-                pass
-        except Exception as e:
-            logging.error(f"CRITICAL ERROR processing post ID {post_id} ({url}): {e}")
-            error_count += 1
-
-    logging.info(f"Execution Summary -> Total Processed: {len(posts)} | Successful: {success_count} | Rejected: {rejected_count} | Errors: {error_count}")
+    print(f"\n[INFO] Batch completed. Total posts processed in this run: {processed_count}. Exiting.")
 
 if __name__ == "__main__":
-    process_raw_posts()
+    run_cleaner()
