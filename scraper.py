@@ -48,9 +48,8 @@ def run_independent_crawler():
 
     today = datetime.now().strftime("%A")
     current_year = datetime.now().year
-    
-    # Fully relies on config.py schedule, no hardcoded fake countries
     day_countries = SCHEDULE.get(today, [])
+    
     if not day_countries:
         return
 
@@ -184,14 +183,9 @@ def run_independent_crawler():
                                             }
 
                                             try:
-                                                # Insert one post immediately
                                                 supabase.table("zunex").insert(insert_data).execute()
-                                                
-                                                # Take a 5 seconds break after inserting one post as requested
                                                 time.sleep(5)
-                                                
-                                                # Return/Break to process next systematically one by one
-                                                return 
+                                                return
                                             except Exception:
                                                 pass
 
