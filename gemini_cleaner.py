@@ -27,7 +27,7 @@ except Exception as e:
     exit(1)
 
 def process_raw_posts():
-    logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs' using gemini-3.5-flash-lite...")
+    logging.info("Starting Gemini Cleaner: processing 'zunex' table in-place using gemini-3.5-flash-lite...")
     
     try:
         response = supabase.table("zunex").select("*").eq("status", "pending").execute()
@@ -40,7 +40,7 @@ def process_raw_posts():
         logging.info("No pending posts found in 'zunex' table.")
         return
 
-    logging.info(f"Found {len(posts)} posts to inspect.")
+    logging.info(f"Found {len(posts)} pending posts to inspect and process.")
 
     success_count = 0
     rejected_count = 0
@@ -54,42 +54,40 @@ def process_raw_posts():
         logging.info(f"Processing post ID: {post_id} | URL: {url}")
 
         if not raw_text:
-            logging.warning(f"Post ID {post_id} has empty snippet. Purging from 'zunex'.")
+            logging.warning(f"Post ID {post_id} has empty snippet. Marking as 'rejected'.")
             try:
-                supabase.table("zunex").delete().eq("id", post_id).execute()
+                supabase.table("zunex").update({"status": "rejected"}).eq("id", post_id).execute()
             except Exception as db_err:
-                logging.error(f"Failed to delete empty post ID {post_id}: {db_err}")
+                logging.error(f"Failed to update empty post ID {post_id}: {db_err}")
             error_count += 1
             continue
 
         prompt = f"""
-        You are an expert human-like senior data inspector and quality auditor specializing in global Job listings, Visa application portals, and Travel/Tourism packages. 
+        You are a strict data cleaner, translator, and structured extractor. Your task is to process the raw scraped text below.
 
-        Your task is to thoroughly analyze the scraped text below from start to finish. You must evaluate whether the content represents a genuine, high-quality, and substantive offer rather than generic site navigation, login pages, ads, cookie banners, or vague text.
+        CRITICAL RULES - NO REWRITING OR HALLUCINATION:
+        1. Do NOT invent, rewrite, or add any information from your own imagination. 
+        2. Strictly use ONLY the facts, details, numbers, and text present in the source snippet below. 
+        3. Translate the existing content accurately into professional, clean ENGLISH. 
+        4. Remove only site navigation noise, repeated menu fragments, cookie notices, or ads, but preserve all original job/visa/travel details faithfully.
 
-        The system handles THREE distinct categories: "Jobs", "Visa", and "Travel". Carefully determine and assign the correct category based on the actual content.
+        The system handles THREE categories: "Jobs", "Visa", and "Travel". Determine the correct category based strictly on the text.
 
-        MANDATORY LANGUAGE RULE: 
-        Regardless of whatever language the scraped text is in (it can be any language spoken anywhere in the world), you MUST completely translate, structure, and format all extracted text (Title, Category, Country, City, Salary, and Snippet) into clear, professional, and natural **ENGLISH** before shifting or saving it. Never leave any non-English text in the final output fields.
+        If the text contains multiple distinct listings, extract each one separately into the "listings" array. If the text is completely vague or junk, set "is_valid": false.
 
-        Inspection Guidelines:
-        1. STRICT VALIDATION: If the text lacks concrete, actionable information (e.g., missing essential requirements, application steps, or clear subject matter), mark "is_valid": false. Do NOT manufacture or hallucinate details. Do not turn bad text into good text artificially.
-        2. RESPECT ORIGINAL DATA: If a post is legitimate and contains solid information, accurately translate and extract what is present without distorting factual details.
-        3. MANDATORY FIELDS: Valid posts MUST contain a clear title in English, a definitive category ("Jobs", "Visa", or "Travel"), and a valid target country in English. City and salary are optional/descriptive (use "Not Specified" if absent).
-        4. CONTENT EXTRACTION: Provide a clean, comprehensive, well-structured English summary for the snippet that preserves exact instructions, requirements, and direct calls to action (such as application links, official procedures, or contact methods).
-
-        Return a JSON object with the following keys strictly:
+        Return a JSON object strictly with these keys:
         - "is_valid": true or false
-        - "title": string (The main title of the posting in English)
-        - "category": string (Must be strictly "Jobs", "Visa", or "Travel")
-        - "country": string (Mandatory target country in English)
-        - "city": string (Target city if available in English, otherwise "Not Specified")
-        - "salary": string (Salary/fee/pricing details if applicable, otherwise "Not Specified")
-        - "email": string (Contact email if found, otherwise empty string)
-        - "phone": string (Contact phone if found, otherwise empty string)
-        - "snippet": string (Cleaned, high-quality, comprehensive English text outlining full details and application steps)
+        - "listings": array of objects (if valid), where each object contains:
+            - "title": string (Translated title from the text)
+            - "category": string (Strictly "Jobs", "Visa", or "Travel")
+            - "country": string (Target country found in text, in English)
+            - "city": string (Target city if available, otherwise "Not Specified")
+            - "salary": string (Salary/fee details if available, otherwise "Not Specified")
+            - "email": string (Contact email if found, otherwise empty string)
+            - "phone": string (Contact phone if found, otherwise empty string)
+            - "snippet": string (Cleaned, strictly faithful English translation of the original text details without any added fluff)
 
-        Scraped Text to Inspect:
+        Raw Scraped Text to Clean and Translate:
         {raw_text}
         """
 
@@ -98,60 +96,4 @@ def process_raw_posts():
                 model='gemini-3.5-flash-lite',
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
-            )
-            
-            result = json.loads(gemini_response.text)
-
-            is_valid = result.get("is_valid")
-            country = result.get("country")
-            category = result.get("category")
-
-            if is_valid and country and category:
-                cleaned_data = {
-                    "title": result.get("title"),
-                    "category": category,
-                    "country": country,
-                    "city": result.get("city", "Not Specified"),
-                    "salary": result.get("salary", "Not Specified"),
-                    "email": result.get("email", ""),
-                    "phone": result.get("phone", ""),
-                    "snippet": result.get("snippet"),
-                    "finalUrl": url,
-                    "status": "pending"
-                }
-                
-                try:
-                    supabase.table("raw_jobs").insert(cleaned_data).execute()
-                    logging.info(f"SUCCESS: Valid translated post inserted into 'raw_jobs' | Title: {result.get('title')} | Country: {country} | Category: {category}")
-                    success_count += 1
-                except Exception as db_ins_err:
-                    logging.error(f"DATABASE ERROR inserting post ID {post_id} into 'raw_jobs': {db_ins_err}")
-                    error_count += 1
-            else:
-                logging.info(f"REJECTED: Post ID {post_id} marked invalid or missing mandatory fields by Gemini. Response: {result}")
-                rejected_count += 1
-
-            try:
-                supabase.table("zunex").delete().eq("id", post_id).execute()
-                logging.info(f"CLEANUP: Post ID {post_id} successfully deleted from 'zunex' table.")
-            except Exception as db_del_err:
-                logging.error(f"DATABASE ERROR deleting post ID {post_id} from 'zunex': {db_del_err}")
-
-        except json.JSONDecodeError as json_err:
-            logging.error(f"JSON PARSE ERROR for post ID {post_id} ({url}): {json_err}. Gemini output was not valid JSON.")
-            error_count += 1
-            try:
-                supabase.table("zunex").delete().eq("id", post_id).execute()
-                logging.info(f"CLEANUP: Malformed post ID {post_id} purged from 'zunex' after parse error.")
-            except Exception:
-                pass
-        except Exception as e:
-            logging.error(f"CRITICAL ERROR processing post ID {post_id} ({url}): {e}")
-            error_count += 1
-
-    logging.info(f"Execution Summary -> Total Processed: {len(posts)} | Successful: {success_count} | Rejected: {rejected_count} | Errors: {error_count}")
-
-if __name__ == "__main__":
-    process_raw_posts()
+                    response
