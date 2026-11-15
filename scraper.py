@@ -73,11 +73,17 @@ def run_independent_crawler():
         "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources", "/employers", "/about", "/contact"
     ]
 
+    collected_counts = {"Jobs": 0, "Visa": 0, "Travel": 0}
+    targets = {"Jobs": 4, "Visa": 2, "Travel": 2}
+
     try:
         shuffled_countries = list(day_countries)
         random.shuffle(shuffled_countries)
 
         for target_country in shuffled_countries:
+            if all(collected_counts[cat] >= targets[cat] for cat in targets):
+                break
+
             cities = COUNTRY_CITIES.get(target_country, [target_country])
             domains = COUNTRY_DOMAINS.get(target_country, [])
             country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"]})
@@ -89,19 +95,30 @@ def run_independent_crawler():
             random.shuffle(shuffled_cities)
 
             for target_city in shuffled_cities:
+                if all(collected_counts[cat] >= targets[cat] for cat in targets):
+                    break
+
                 shuffled_domains = list(domains)
 
                 for target_domain in shuffled_domains:
-                    categories = ["Jobs", "Visa", "Travel"]
-                    random.shuffle(categories)
+                    if all(collected_counts[cat] >= targets[cat] for cat in targets):
+                        break
 
-                    for category in categories:
+                    ordered_categories = ["Jobs", "Visa", "Travel"]
+
+                    for category in ordered_categories:
+                        if collected_counts[category] >= targets[category]:
+                            continue
+
                         if isinstance(country_kw_dict, dict):
                             keywords = list(country_kw_dict.get(category, ["apply now"]))
                         else:
                             keywords = list(country_kw_dict)
 
                         for keyword in keywords:
+                            if collected_counts[category] >= targets[category]:
+                                break
+
                             search_urls = [
                                 f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
                                 f"https://www.{target_domain}/search?q={keyword}",
@@ -110,6 +127,9 @@ def run_independent_crawler():
                             ]
 
                             for s_url in search_urls:
+                                if collected_counts[category] >= targets[category]:
+                                    break
+
                                 try:
                                     driver.get(s_url)
                                     time.sleep(5)
@@ -139,6 +159,9 @@ def run_independent_crawler():
                                             candidate_links.append((full_link, title_text))
 
                                     for j_link, j_title in candidate_links[:30]:
+                                        if collected_counts[category] >= targets[category]:
+                                            break
+
                                         if is_already_scraped(j_link):
                                             continue
 
@@ -184,8 +207,8 @@ def run_independent_crawler():
 
                                             try:
                                                 supabase.table("zunex").insert(insert_data).execute()
+                                                collected_counts[category] += 1
                                                 time.sleep(5)
-                                                return
                                             except Exception:
                                                 pass
 
