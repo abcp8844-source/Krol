@@ -1,0 +1,44 @@
+name: Clean Success Transfer
+
+on:
+  schedule:
+    - cron: '0 0 */10 * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process Zonex Records
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zonex?status=eq.success" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}"
+
+          RECORDS=$(curl -s -X GET "${SUPABASE_URL}/rest/v1/zonex?status=neq.success" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}")
+
+          COUNT=$(echo "$RECORDS" | jq 'length')
+
+          if [ "$COUNT" -gt 0 ]; then
+            PAYLOAD=$(echo "$RECORDS" | jq '[.[] | .audit_status = null]')
+
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${SUPABASE_URL}/rest/v1/raw_jobs" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: resolution=ignore-duplicates" \
+              -d "$PAYLOAD")
+
+            if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
+              curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zonex?status=neq.success" \
+                -H "apikey: ${SUPABASE_KEY}" \
+                -H "Authorization: Bearer ${SUPABASE_KEY}"
+            else
+              exit 1
+            fi
+          fi
