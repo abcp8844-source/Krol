@@ -26,10 +26,9 @@ except Exception as e:
     exit(1)
 
 def process_raw_posts():
-    logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs'...")
+    logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs' with universal English translation...")
     
     try:
-        # Source table is 'zunex'
         response = supabase.table("zunex").select("*").eq("status", "pending_inspection").execute()
         posts = response.data
     except Exception as e:
@@ -69,22 +68,25 @@ def process_raw_posts():
 
         The system handles THREE distinct categories: "Jobs", "Visa", and "Travel". Carefully determine and assign the correct category based on the actual content.
 
+        MANDATORY LANGUAGE RULE: 
+        Regardless of whatever language the scraped text is in (it can be any language spoken anywhere in the world), you MUST completely translate, structure, and format all extracted text (Title, Category, Country, City, Salary, and Snippet) into clear, professional, and natural **ENGLISH** before shifting or saving it. Never leave any non-English text in the final output fields.
+
         Inspection Guidelines:
         1. STRICT VALIDATION: If the text lacks concrete, actionable information (e.g., missing essential requirements, application steps, or clear subject matter), mark "is_valid": false. Do NOT manufacture or hallucinate details. Do not turn bad text into good text artificially.
-        2. RESPECT ORIGINAL DATA: If a post is legitimate and contains solid information, accurately extract what is present. Do not distort factual details.
-        3. MANDATORY FIELDS: Valid posts MUST contain a clear title, a definitive category ("Jobs", "Visa", or "Travel"), and a valid country. City and salary are optional/descriptive (use "Not Specified" if absent).
-        4. CONTENT EXTRACTION: Provide a clean, comprehensive summary for the snippet that preserves exact instructions, requirements, and direct calls to action (such as application links, official procedures, or contact methods).
+        2. RESPECT ORIGINAL DATA: If a post is legitimate and contains solid information, accurately translate and extract what is present without distorting factual details.
+        3. MANDATORY FIELDS: Valid posts MUST contain a clear title in English, a definitive category ("Jobs", "Visa", or "Travel"), and a valid target country in English. City and salary are optional/descriptive (use "Not Specified" if absent).
+        4. CONTENT EXTRACTION: Provide a clean, comprehensive, well-structured English  for the snippet that preserves exact instructions, requirements, and direct calls to action (such as application links,  procedures, or contact methods).
 
         Return a JSON object with the following keys strictly:
         - "is_valid": true or false
-        - "title": string (The main title of the posting)
+        - "title": string (The main title of the posting in English)
         - "category": string (Must be strictly "Jobs", "Visa", or "Travel")
-        - "country": string (Mandatory target country)
-        - "city": string (Target city if available, otherwise "Not Specified")
+        - "country": string (Mandatory target country in English)
+        - "city": string (Target city if available in English, otherwise "Not Specified")
         - "salary": string (Salary/fee/pricing details if applicable, otherwise "Not Specified")
         - "email": string (Contact email if found, otherwise empty string)
         - "phone": string (Contact phone if found, otherwise empty string)
-        - "snippet": string (Cleaned, high-quality, comprehensive text outlining full details and application steps)
+        - "snippet": string (Cleaned, high-quality, comprehensive English text outlining full details and application steps)
 
         Scraped Text to Inspect:
         {raw_text}
@@ -120,9 +122,8 @@ def process_raw_posts():
                 }
                 
                 try:
-                    # Destination table is 'raw_jobs'
                     supabase.table("raw_jobs").insert(cleaned_data).execute()
-                    logging.info(f"SUCCESS: Valid post inserted into 'raw_jobs' | Title: {result.get('title')} | Country: {country} | Category: {category}")
+                    logging.info(f"SUCCESS: Valid translated post inserted into 'raw_jobs' | Title: {result.get('title')} | Country: {country} | Category: {category}")
                     success_count += 1
                 except Exception as db_ins_err:
                     logging.error(f"DATABASE ERROR inserting post ID {post_id} into 'raw_jobs': {db_ins_err}")
@@ -132,7 +133,6 @@ def process_raw_posts():
                 rejected_count += 1
 
             try:
-                # Cleanup from source 'zunex' table
                 supabase.table("zunex").delete().eq("id", post_id).execute()
                 logging.info(f"CLEANUP: Post ID {post_id} successfully deleted from 'zunex' table.")
             except Exception as db_del_err:
