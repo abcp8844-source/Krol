@@ -26,17 +26,18 @@ except Exception as e:
     exit(1)
 
 def process_raw_posts():
-    logging.info("Starting Gemini Cleaner job inspection process...")
+    logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs'...")
     
     try:
-        response = supabase.table("raw_jobs").select("*").eq("status", "pending_inspection").execute()
+        # Source table is 'zunex'
+        response = supabase.table("zunex").select("*").eq("status", "pending_inspection").execute()
         posts = response.data
     except Exception as e:
-        logging.error(f"Database error while fetching pending posts from raw_jobs: {e}")
+        logging.error(f"Database error while fetching pending posts from 'zunex': {e}")
         return
 
     if not posts:
-        logging.info("No pending inspection posts found in raw_jobs table.")
+        logging.info("No pending inspection posts found in 'zunex' table.")
         return
 
     logging.info(f"Found {len(posts)} posts to inspect.")
@@ -53,9 +54,9 @@ def process_raw_posts():
         logging.info(f"Processing post ID: {post_id} | URL: {url}")
 
         if not raw_text:
-            logging.warning(f"Post ID {post_id} has empty snippet. Purging from raw_jobs.")
+            logging.warning(f"Post ID {post_id} has empty snippet. Purging from 'zunex'.")
             try:
-                supabase.table("raw_jobs").delete().eq("id", post_id).execute()
+                supabase.table("zunex").delete().eq("id", post_id).execute()
             except Exception as db_err:
                 logging.error(f"Failed to delete empty post ID {post_id}: {db_err}")
             error_count += 1
@@ -119,28 +120,30 @@ def process_raw_posts():
                 }
                 
                 try:
-                    supabase.table("raw_jobs_score").insert(cleaned_data).execute()
-                    logging.info(f"SUCCESS: Valid post inserted into raw_jobs_score | Title: {result.get('title')} | Country: {country} | Category: {category}")
+                    # Destination table is 'raw_jobs'
+                    supabase.table("raw_jobs").insert(cleaned_data).execute()
+                    logging.info(f"SUCCESS: Valid post inserted into 'raw_jobs' | Title: {result.get('title')} | Country: {country} | Category: {category}")
                     success_count += 1
                 except Exception as db_ins_err:
-                    logging.error(f"DATABASE ERROR inserting post ID {post_id} into raw_jobs_score: {db_ins_err}")
+                    logging.error(f"DATABASE ERROR inserting post ID {post_id} into 'raw_jobs': {db_ins_err}")
                     error_count += 1
             else:
                 logging.info(f"REJECTED: Post ID {post_id} marked invalid or missing mandatory fields by Gemini. Response: {result}")
                 rejected_count += 1
 
             try:
-                supabase.table("raw_jobs").delete().eq("id", post_id).execute()
-                logging.info(f"CLEANUP: Post ID {post_id} successfully deleted from raw_jobs table.")
+                # Cleanup from source 'zunex' table
+                supabase.table("zunex").delete().eq("id", post_id).execute()
+                logging.info(f"CLEANUP: Post ID {post_id} successfully deleted from 'zunex' table.")
             except Exception as db_del_err:
-                logging.error(f"DATABASE ERROR deleting post ID {post_id} from raw_jobs: {db_del_err}")
+                logging.error(f"DATABASE ERROR deleting post ID {post_id} from 'zunex': {db_del_err}")
 
         except json.JSONDecodeError as json_err:
             logging.error(f"JSON PARSE ERROR for post ID {post_id} ({url}): {json_err}. Gemini output was not valid JSON.")
             error_count += 1
             try:
-                supabase.table("raw_jobs").delete().eq("id", post_id).execute()
-                logging.info(f"CLEANUP: Malformed post ID {post_id} purged from raw_jobs after parse error.")
+                supabase.table("zunex").delete().eq("id", post_id).execute()
+                logging.info(f"CLEANUP: Malformed post ID {post_id} purged from 'zunex' after parse error.")
             except Exception:
                 pass
         except Exception as e:
