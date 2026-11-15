@@ -20,27 +20,33 @@ def process_raw_posts():
     for post in posts:
         raw_text = post.get("snippet", "")
         url = post.get("finalUrl", "")
-        category = post.get("category", "Jobs")
+        original_category = post.get("category", "Jobs")
 
         prompt = f"""
-        You are an expert human-like inspection system for job, visa, and travel listings. 
-        Analyze the following scraped text comprehensively from start to finish.
-        
-        Evaluate if this contains substantive, legitimate offers with details like company, requirements, and application procedures. 
-        Discard cookies policies, generic site banners, login pages, ads, or incomplete/vague snippets.
-        
-        If valid, extract and return a JSON object with:
-        - "is_valid": true/false
-        - "title": string
-        - "category": string (mandatory, e.g., Jobs, Visa, Travel)
-        - "country": string (mandatory)
-        - "city": string (optional, or "Not Specified")
-        - "salary": string
-        - "email": string
-        - "phone": string
-        - "snippet": a comprehensive summary including requirements and direct call to action for applying.
+        You are an expert human-like senior data inspector and quality auditor specializing in global Job listings, Visa application portals, and Travel/Tourism packages. 
 
-        Scraped Text:
+        Your task is to thoroughly analyze the scraped text below from start to finish. You must evaluate whether the content represents a genuine, high-quality, and substantive offer rather than generic site navigation, login pages, ads, cookie banners, or vague text.
+
+        The system handles THREE distinct categories: "Jobs", "Visa", and "Travel". Carefully determine and assign the correct category based on the actual content.
+
+        Inspection Guidelines:
+        1. STRICT VALIDATION: If the text lacks concrete, actionable information (e.g., missing essential requirements, application steps, or clear subject matter), mark "is_valid": false. Do NOT manufacture or hallucinate details. Do not turn bad text into good text artificially.
+        2. RESPECT ORIGINAL DATA: If a post is legitimate and contains solid information, accurately extract what is present. Do not distort factual details.
+        3. MANDATORY FIELDS: Valid posts MUST contain a clear title, a definitive category ("Jobs", "Visa", or "Travel"), and a valid country. City and salary are optional/descriptive (use "Not Specified" if absent).
+        4. CONTENT EXTRACTION: Provide a clean, comprehensive summary for the snippet that preserves exact instructions, requirements, and direct calls to action (such as application links, official procedures, or contact methods).
+
+        Return a JSON object with the following keys strictly:
+        - "is_valid": true or false
+        - "title": string (The main title of the posting)
+        - "category": string (Must be strictly "Jobs", "Visa", or "Travel")
+        - "country": string (Mandatory target country)
+        - "city": string (Target city if available, otherwise "Not Specified")
+        - "salary": string (Salary/fee/pricing details if applicable, otherwise "Not Specified")
+        - "email": string (Contact email if found, otherwise empty string)
+        - "phone": string (Contact phone if found, otherwise empty string)
+        - "snippet": string (Cleaned, high-quality, comprehensive text outlining full details and application steps)
+
+        Scraped Text to Inspect:
         {raw_text}
         """
 
