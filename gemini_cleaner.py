@@ -27,7 +27,7 @@ except Exception as e:
     exit(1)
 
 def process_raw_posts():
-    logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs' with universal English translation...")
+    logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs' using gemini-3.5-flash-lite...")
     
     try:
         response = supabase.table("zunex").select("*").eq("status", "pending").execute()
@@ -37,7 +37,7 @@ def process_raw_posts():
         return
 
     if not posts:
-        logging.info("No pending inspection posts found in 'zunex' table.")
+        logging.info("No pending posts found in 'zunex' table.")
         return
 
     logging.info(f"Found {len(posts)} posts to inspect.")
@@ -76,7 +76,7 @@ def process_raw_posts():
         1. STRICT VALIDATION: If the text lacks concrete, actionable information (e.g., missing essential requirements, application steps, or clear subject matter), mark "is_valid": false. Do NOT manufacture or hallucinate details. Do not turn bad text into good text artificially.
         2. RESPECT ORIGINAL DATA: If a post is legitimate and contains solid information, accurately translate and extract what is present without distorting factual details.
         3. MANDATORY FIELDS: Valid posts MUST contain a clear title in English, a definitive category ("Jobs", "Visa", or "Travel"), and a valid target country in English. City and salary are optional/descriptive (use "Not Specified" if absent).
-        4. CONTENT EXTRACTION: Provide a clean, comprehensive, well-structured English  for the snippet that preserves exact instructions, requirements, and direct calls to action (such as application links,  procedures, or contact methods).
+        4. CONTENT EXTRACTION: Provide a clean, comprehensive, well-structured English summary for the snippet that preserves exact instructions, requirements, and direct calls to action (such as application links, official procedures, or contact methods).
 
         Return a JSON object with the following keys strictly:
         - "is_valid": true or false
@@ -97,9 +97,9 @@ def process_raw_posts():
             gemini_response = client.models.generate_content(
                 model='gemini-3.5-flash-lite',
                 contents=prompt,
-                config={
-                    "response_mime_type": "application/json"
-                }
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
             )
             
             result = json.loads(gemini_response.text)
