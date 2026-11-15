@@ -52,4 +52,5 @@ def extract_strict_job_details(driver, target_url, target_country, target_city, 
         if any(j in page_text_lower for j in junk_indicators):
             return None
 
-        if target_country.lower() not in page_text_lower and target_city.
+        if target_country.lower() not in page_text_lower and target_city.lower() not in page_text_lower:
+    return None
