@@ -1,24 +1,24 @@
-name: Clean Success Transfer
+name: Cleanup Success and Transfer
 
 on:
   schedule:
-    - cron: '0 0 */10 * *'
+    - cron: '0 0 */2 * *'
   workflow_dispatch:
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Process Zonex Records
+      - name: Process Zunex Records
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zonex?status=eq.success" \
+          curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zunex?status=eq.success" \
             -H "apikey: ${SUPABASE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_KEY}"
 
-          RECORDS=$(curl -s -X GET "${SUPABASE_URL}/rest/v1/zonex?status=neq.success" \
+          RECORDS=$(curl -s -X GET "${SUPABASE_URL}/rest/v1/zunex?status=neq.success" \
             -H "apikey: ${SUPABASE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_KEY}")
 
@@ -35,7 +35,7 @@ jobs:
               -d "$PAYLOAD")
 
             if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
-              curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zonex?status=neq.success" \
+              curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zunex?status=neq.success" \
                 -H "apikey: ${SUPABASE_KEY}" \
                 -H "Authorization: Bearer ${SUPABASE_KEY}"
             else
