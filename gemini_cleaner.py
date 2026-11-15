@@ -29,7 +29,7 @@ def process_raw_posts():
     logging.info("Starting Gemini Cleaner job inspection from 'zunex' to 'raw_jobs' with universal English translation...")
     
     try:
-        response = supabase.table("zunex").select("*").eq("status", "pending_inspection").execute()
+        response = supabase.table("zunex").select("*").eq("status", "pending").execute()
         posts = response.data
     except Exception as e:
         logging.error(f"Database error while fetching pending posts from 'zunex': {e}")
