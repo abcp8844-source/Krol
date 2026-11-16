@@ -37,7 +37,8 @@ def is_already_scraped(url):
     try:
         res = supabase.table("zunex").select("id").eq("link", url).execute()
         return len(res.data) > 0
-    except Exception:
+    except Exception as e:
+        print(f"[TRACE-DB-CHECK-ERROR] {e}")
         return False
 
 def is_root_or_homepage(url, domain):
@@ -57,20 +58,24 @@ def is_root_or_homepage(url, domain):
 
 def deep_scroll_page(page):
     try:
+        print(f"[TRACE-SCROLL] Initiating Playwright smooth deep scroll...")
         for _ in range(3):
             page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(1.5)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[TRACE-SCROLL-ERROR] {e}")
 
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
-    print(f"\n[TRACE] Processing Country: [{target_country}] | Category: [{category}]")
+    print(f"\n==================================================")
+    print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
+    print(f"==================================================")
     
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
     country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {})
     
     if not domains:
+        print(f"[TRACE-STOP] No domains configured for country: {target_country}")
         return False
         
     if isinstance(country_kw_dict, dict):
@@ -81,15 +86,24 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     if not keywords:
         keywords = ["apply now", "visa support", "travel package"]
 
+    print(f"[TRACE-INFO] Total Domains: {len(domains)} | Keywords: {len(keywords)} | Cities: {len(cities)}")
+
     for target_domain in domains:
+        print(f"\n  [TRACE-DOMAIN] Evaluating Domain -> [https://www.{target_domain}]")
+        
         base_domain_url = f"https://www.{target_domain}"
         try:
             page.goto(base_domain_url, wait_until="domcontentloaded", timeout=25000)
             time.sleep(2)
-            if not page.url or "error" in page.url.lower():
+            current_loaded_url = page.url
+            if not current_loaded_url or "error" in current_loaded_url.lower():
+                print(f"  [TRACE-REJECT] Domain [{target_domain}] failed to connect or returned error. Skipping.")
                 continue
-        except Exception:
+        except Exception as conn_err:
+            print(f"  [TRACE-ERROR] Connection failed for [{target_domain}]: {conn_err}. Moving to next.")
             continue
+
+        domain_has_activity = False
 
         for keyword in keywords:
             encoded_kw = keyword.replace(" ", "%20")
@@ -112,8 +126,10 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                 for path in deep_paths:
                     s_url = f"https://www.{target_domain}{path}"
                     try:
+                        print(f"    [TRACE-NAV] Trying Deep Path -> Domain: {target_domain} | Keyword: '{keyword}' | City: '{target_city}' | Path: {path}")
                         page.goto(s_url, wait_until="domcontentloaded", timeout=20000)
                         time.sleep(2)
+                        
                         deep_scroll_page(page)
                         
                         raw_links = page.eval_on_selector_all(
@@ -147,13 +163,18 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 candidate_links.append((href, title_candidate))
 
                         unique_candidates = list(dict(candidate_links).items())
+                        print(f"      [TRACE-PARSE] Discovered {len(unique_candidates)} unique candidate links from deep path.")
+
                         if not unique_candidates:
                             continue
+
+                        domain_has_activity = True
 
                         for j_link, j_title in unique_candidates[:10]:
                             if is_root_or_homepage(j_link, target_domain) or is_already_scraped(j_link):
                                 continue
                             
+                            print(f"        [TRACE-EXTRACT] Deep extracting details: {j_link}")
                             enriched_data = extract_strict_job_details(
                                 page, j_link, target_country, target_city, category
                             )
@@ -161,6 +182,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             if enriched_data and enriched_data.get('finalUrl'):
                                 final_url = enriched_data['finalUrl']
                                 if is_root_or_homepage(final_url, target_domain) or is_already_scraped(final_url):
+                                    print(f"        [TRACE-REJECT] Final URL is homepage or already scraped: {final_url}")
                                     continue
                                     
                                 final_title = format_strict_title(
@@ -193,24 +215,36 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"[SUCCESS] Inserted -> {target_country} ({target_city}) | Domain: {target_domain}")
+                                    print(f"  [TRACE-SUCCESS] VALID POST SECURED & INSERTED! Country: {target_country} ({target_city}) | Domain: {target_domain}")
                                     return True
-                                except Exception:
-                                    pass
-                    except Exception:
+                                except Exception as db_err:
+                                    print(f"  [TRACE-DB-ERROR] Insertion failed: {db_err}")
+                                    
+                    except Exception as nav_err:
+                        # Continue silently or print debug if needed
                         continue
         
+        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] fully exhausted. Shifting to next domain.")
+
+    print(f"[TRACE-COUNTRY-EXHAUST] All domains exhausted for country [{target_country}] in category [{category}].")
     return False
 
 def run_independent_crawler():
     if not supabase:
+        print("[TRACE-CRITICAL] Supabase client is not initialized.")
         return
 
     today = datetime.now().strftime("%A")
     current_year = datetime.now().year
     day_countries = SCHEDULE.get(today, [])
     
+    print(f"\n==================================================")
+    print(f"=== PLAYWRIGHT CRAWLER INITIATED | Day: {today} | Year: {current_year} ===")
+    print(f"=== Scheduled Countries for Today: {day_countries} ===")
+    print(f"==================================================")
+
     if not day_countries:
+        print("[TRACE-INFO] No countries scheduled for today.")
         return
 
     blocked_url_terms = [
@@ -220,6 +254,7 @@ def run_independent_crawler():
     ]
 
     with sync_playwright() as p:
+        print("[TRACE-INIT] Launching Playwright Chromium Headless Browser...")
         browser = p.chromium.launch(
             headless=True,
             args=[
@@ -240,9 +275,16 @@ def run_independent_crawler():
         page.set_default_timeout(30000)
 
         try:
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 1: STARTING JOB POSTS COLLECTION ------")
+            print(f"--------------------------------------------------")
             for country in day_countries:
+                print(f"\n[PHASE-1-COUNTRY] Processing Country: {country}")
                 search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms)
 
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 2: STARTING VISA POSTS COLLECTION -----")
+            print(f"--------------------------------------------------")
             visa_collected = 0
             visa_attempts = 0
             while visa_collected < 2 and visa_attempts < 15:
@@ -252,9 +294,14 @@ def run_independent_crawler():
                     if visa_collected >= 2:
                         break
                     visa_attempts += 1
+                    print(f"\n[PHASE-2-VISA-ATTEMPT {visa_attempts}] Shuffled country picked: [{country}]")
                     if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
                         visa_collected += 1
+                        print(f"[PHASE-2-VISA-PROGRESS] Total Visa Posts Collected: {visa_collected}/2")
 
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 3: STARTING TRAVEL POSTS COLLECTION ---")
+            print(f"--------------------------------------------------")
             travel_collected = 0
             travel_attempts = 0
             while travel_collected < 2 and travel_attempts < 15:
@@ -264,13 +311,20 @@ def run_independent_crawler():
                     if travel_collected >= 2:
                         break
                     travel_attempts += 1
+                    print(f"\n[PHASE-3-TRAVEL-ATTEMPT {travel_attempts}] Shuffled country picked: [{country}]")
                     if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
                         travel_collected += 1
+                        print(f"[PHASE-3-TRAVEL-PROGRESS] Total Travel Posts Collected: {travel_collected}/2")
+
+            print(f"\n==================================================")
+            print("=== CRAWLER EXECUTION COMPLETED SUCCESSFULLY ===")
+            print(f"==================================================")
 
         except Exception as e:
-            print(f"[CRITICAL ERROR] {e}")
+            print(f"[TRACE-CRITICAL-ERROR] Crawler aborted due to exception: {e}")
         finally:
             browser.close()
+            print("[TRACE-SHUTDOWN] Playwright browser closed cleanly.")
 
 if __name__ == "__main__":
     run_independent_crawler()
