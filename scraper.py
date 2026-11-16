@@ -76,7 +76,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                 for s_url in search_urls:
                     try:
                         print(f"[TRACE-NAV] Navigating to: {s_url}")
-                        page.goto(s_url, timeout=25000)
+                        page.goto(s_url, timeout=35000)
                         time.sleep(3)
                         
                         raw_links = page.eval_on_selector_all(
