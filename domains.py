@@ -1,176 +1,166 @@
 COUNTRY_DOMAINS = {
     "UAE": [
-        "mohre.gov.ae", "dubaicareers.ae", "abudhabi.ae", "nafis.gov.ae",
-        "dubizzle.ae", "laimoon.com", "khaleejtimes.com", "gulftoday.ae",
-        "tawteen.gov.ae", "sharjah.ae"
+        "naukrigulf.com", "bayt.com", "dubizzle.ae", "gulftalent.com", "indeed.ae", 
+        "linkedin.com", "glassdoor.com", "monstergulf.com", "laimoon.com", "tanqeeb.com"
     ],
     "Saudi Arabia": [
-        "jadarat.sa", "hrsd.gov.sa", "qiwa.sa", "taqat.sa",
-        "mzadsaudi.com", "ewdifh.com", "wadhefa.com", "okaz.com.sa",
-        "alyaum.com", "sabq.org"
+        "bayt.com", "saudi.tanqeeb.com", "naukrigulf.com", "gulftalent.com", "sa.indeed.com", 
+        "linkedin.com", "glassdoor.com", "jadarat.sa", "mzadsaudi.com", "hrsd.gov.sa"
     ],
     "Qatar": [
-        "kawader.gov.qa", "madloul.gov.qa", "mol.gov.qa", "qatarliving.com",
-        "iloveqatar.net", "raya.com", "al-sharq.com", "gulf-times.com",
-        "thepeninsulaqatar.com"
+        "qatarliving.com", "bayt.com", "gulftalent.com", "qa.indeed.com", 
+        "linkedin.com", "glassdoor.com", "iloveqatar.net", "qatarcars.com", "tanqeeb.com"
     ],
     "Bahrain": [
-        "mol.gov.bh", "lmra.gov.bh", "bahrain.bh", "akhbar-alkhaleej.com",
-        "albiladpress.com", "alwatannews.net", "majra.me", "tamkeen.bh"
+        "bayt.com", "bahrain.tanqeeb.com", "naukrigulf.com", "bh.indeed.com", 
+        "linkedin.com", "glassdoor.com", "gulftalent.com", "akhbar-alkhaleej.com"
     ],
     "Kuwait": [
-        "csc.gov.kw", "pam.gov.kw", "e.gov.kw", "opensooq.com",
-        "alanba.com.kw", "alqabas.com", "alraimedia.com", "kuwaittimes.com"
+        "bayt.com", "kuwait.tanqeeb.com", "naukrigulf.com", "kw.indeed.com", 
+        "linkedin.com", "glassdoor.com", "gulftalent.com", "opensooq.com"
     ],
     "Oman": [
-        "mol.gov.om", "tajdeed.om", "oman.om", "shabiba.com",
-        "omandaily.om", "alwatan.om", "timesofoman.com", "muscatdaily.com"
+        "bayt.com", "oman.tanqeeb.com", "naukrigulf.com", "om.indeed.com", 
+        "linkedin.com", "glassdoor.com", "gulftalent.com", "shabiba.com"
     ],
     "Japan": [
-        "hellowork.mhlw.go.jp", "tokyodev.com", "gaijinpot.com", "en-japan.com",
-        "rikunabi.com", "mynavi.jp", "doda.jp", "townwork.net",
-        "baitoru.com", "wantedly.com"
+        "daijob.com", "tokyodev.com", "gaijinpot.com", "jp.indeed.com", 
+        "linkedin.com", "glassdoor.com", "en-japan.com", "rikunabi.com", "careercross.com"
     ],
     "South Korea": [
-        "work.go.kr", "saramin.co.kr", "jobkorea.co.kr", "incruit.com",
-        "albamon.com", "alba.co.kr", "peoplenjob.com", "jobplanet.co.kr",
-        "worknet.go.kr"
+        "saramin.co.kr", "jobkorea.co.kr", "wanted.co.kr", "kr.indeed.com", 
+        "linkedin.com", "glassdoor.com", "work.go.kr", "incruit.com"
     ],
     "China": [
-        "mohrss.gov.cn", "zhaopin.com", "51job.com", "liepin.com",
-        "chinajob.com", "bosszhipin.com", "58.com", "yingjiesheng.com",
-        "echinacities.com"
+        "zhaopin.com", "51job.com", "liepin.com", "chinajob.com", 
+        "linkedin.cn", "glassdoor.com", "bosszhipin.com", "lagou.com"
     ],
     "Taiwan": [
-        "taiwanjobs.gov.tw", "104.com.tw", "1111.com.tw", "518.com.tw",
-        "yes123.com.tw", "yourator.co", "chickpt.com.tw", "ejob.gov.tw"
+        "104.com.tw", "1111.com.tw", "tw.indeed.com", "linkedin.com", 
+        "glassdoor.com", "518.com.tw", "yourator.co"
     ],
     "Singapore": [
-        "mycareersfuture.gov.sg", "wsg.gov.sg", "fastjobs.sg", "stjobs.sg",
-        "cultjobs.com", "gumtree.sg", "nodeflair.com", "careers.gov.sg"
+        "jobstreet.com.sg", "mycareersfuture.gov.sg", "sg.indeed.com", 
+        "linkedin.com", "glassdoor.com", "fastjobs.sg", "jobsdb.com"
     ],
     "Hong Kong": [
-        "jobs.gov.hk", "labour.gov.hk", "ctgoodjobs.hk", "recruit.com.hk",
-        "cpjobs.com", "jump.mingpao.com", "headlinejobs.hk", "moovup.com"
+        "hk.jobsdb.com", "ctgoodjobs.hk", "hk.indeed.com", 
+        "linkedin.com", "glassdoor.com", "recruit.com.hk", "cpjobs.com"
     ],
     "Thailand": [
-        "doe.go.th", "thaimeechang.doe.go.th", "jobthai.com", "jobbkk.com",
-        "jobtopgun.com", "thaijob.com", "workventure.com", "blognone.com"
+        "jobthai.com", "th.jobsdb.com", "th.indeed.com", "linkedin.com", 
+        "glassdoor.com", "jobbkk.com", "workventure.com"
     ],
     "Vietnam": [
-        "vieclam.molisa.gov.vn", "vietnamworks.com", "topcv.vn", "vieclam24h.vn",
-        "timviecnhanh.com", "mywork.com.vn", "itviec.com", "123job.vn"
+        "vietnamworks.com", "topcv.vn", "vn.indeed.com", "linkedin.com", 
+        "glassdoor.com", "careerbuilder.vn", "vieclam24h.vn"
     ],
     "Malaysia": [
-        "myfuturejobs.gov.my", "spa.gov.my", "maukerja.my", "hiredly.com",
-        "ricebowl.my", "mudah.my", "kerjaya.co", "jobstore.com"
+        "jobstreet.com.my", "maukerja.my", "malaysia.indeed.com", 
+        "linkedin.com", "glassdoor.com", "myfuturejobs.gov.my", "hiredly.com"
     ],
     "Indonesia": [
-        "karirhub.kemnaker.go.id", "siapkerja.kemnaker.go.id", "loker.id",
-        "karir.com", "jobs.id", "urbanhire.com", "glints.com", "kalibrr.com"
+        "jobstreet.co.id", "glints.com", "id.indeed.com", "linkedin.com", 
+        "glassdoor.com", "kalibrr.com", "loker.id"
     ],
     "Philippines": [
-        "philjobnet.gov.ph", "csc.gov.ph", "dmw.gov.ph", "onlinejobs.ph",
-        "bossjob.ph", "mynimo.com", "workabroad.ph", "bestjobs.ph"
+        "jobstreet.com.ph", "kalibrr.com", "ph.indeed.com", "linkedin.com", 
+        "glassdoor.com", "onlinejobs.ph", "bossjob.ph"
     ],
     "Germany": [
-        "arbeitsagentur.de", "make-it-in-germany.com", "bund.de", "stepstone.de",
-        "stellenanzeigen.de", "meinestadt.de", "kimeta.de", "jobware.de",
-        "stellenmarkt.de"
+        "stepstone.de", "arbeitsagentur.de", "de.indeed.com", "linkedin.com", 
+        "glassdoor.com", "xing.com", "monster.de", "stellenanzeigen.de"
     ],
     "France": [
-        "francetravail.fr", "apec.fr", "choisirleservicepublic.gouv.fr",
-        "hellowork.com", "cadremploi.fr", "meteojob.com", "regionsjob.com",
-        "leboncoin.fr"
+        "francetravail.fr", "apec.fr", "fr.indeed.com", "linkedin.com", 
+        "glassdoor.com", "welcometothejungle.com", "hellowork.com"
     ],
     "Netherlands": [
-        "werk.nl", "werkenbijdeoverheid.nl", "nationalevacaturebank.nl",
-        "intermediair.nl", "uitzendbureau.nl", "jobbird.com", "ictvacatures.nl"
+        "nationalevacaturebank.nl", "werk.nl", "nl.indeed.com", 
+        "linkedin.com", "glassdoor.com", "monsterboard.nl", "intermediair.nl"
     ],
     "Belgium": [
-        "vdab.be", "actiris.brussels", "leforem.be", "werkenvoor.be",
-        "references.be", "jobat.be", "ictjob.be", "regiojobs.be"
+        "vdab.be", "stepstone.be", "be.indeed.com", "linkedin.com", 
+        "glassdoor.com", "actiris.brussels", "references.be"
     ],
     "Switzerland": [
-        "arbeit.swiss", "stelle.admin.ch", "jobs.ch", "jobup.ch",
-        "stellen.ch", "jobwinner.ch", "ostjob.ch", "zentraljob.ch"
+        "jobs.ch", "jobup.ch", "ch.indeed.com", "linkedin.com", 
+        "glassdoor.com", "jobscout24.ch", "stellen.ch"
     ],
     "Austria": [
-        "ams.at", "jobboerse.gv.at", "karriere.at", "willhaben.at",
-        "hokify.at", "derstandard.at", "kurier.at", "salzburg24.at"
+        "karriere.at", "stepstone.at", "at.indeed.com", "linkedin.com", 
+        "glassdoor.com", "ams.at", "willhaben.at"
     ],
     "UK": [
-        "findajob.dwp.gov.uk", "civilservicejobs.service.gov.uk", "nhs.uk",
-        "reed.co.uk", "cv-library.co.uk", "totaljobs.com", "s1jobs.com",
-        "nijobs.com", "gumtree.com"
+        "reed.co.uk", "cv-library.co.uk", "uk.indeed.com", "linkedin.com", 
+        "glassdoor.com", "totaljobs.com", "findajob.dwp.gov.uk", "monster.co.uk"
     ],
     "Ireland": [
-        "publicjobs.ie", "jobsireland.ie", "irishjobs.ie", "jobs.ie",
-        "recruitireland.com", "activelink.ie", "myjob.ie"
+        "irishjobs.ie", "jobs.ie", "ie.indeed.com", "linkedin.com", 
+        "glassdoor.com", "recruitireland.com", "publicjobs.ie"
     ],
     "Sweden": [
-        "arbetsformedlingen.se", "offentligajobb.se", "blocket.se", "jobb.se",
-        "vakanser.se", "nyteknik.se", "studentjob.se", "netjobs.com"
+        "arbetsformedlingen.se", "blocket.se", "se.indeed.com", 
+        "linkedin.com", "glassdoor.com", "monster.se"
     ],
     "Norway": [
-        "arbeidsplassen.nav.no", "nav.no", "finn.no", "jobbnorge.no",
-        "karrierestart.no", "tu.no", "webcruiter.no", "kode24.no"
+        "finn.no", "nav.no", "no.indeed.com", "linkedin.com", 
+        "glassdoor.com", "karrierestart.no"
     ],
     "Denmark": [
-        "jobnet.dk", "statens-adm.dk", "jobindex.dk", "ofir.dk",
-        "it-jobbank.dk", "jobzonen.dk", "graduateland.com"
+        "jobindex.dk", "ofir.dk", "dk.indeed.com", "linkedin.com", 
+        "glassdoor.com", "jobnet.dk"
     ],
     "Finland": [
-        "tyomarkkinatori.fi", "valtiolle.fi", "kuntarekry.fi", "duunitori.fi",
-        "oikotie.fi", "uraopas.fi", "rekrytointi.com"
+        "duunitori.fi", "tyomarkkinatori.fi", "fi.indeed.com", 
+        "linkedin.com", "glassdoor.com", "oikotie.fi"
     ],
     "Canada": [
-        "jobbank.gc.ca", "emploiquebec.gouv.qc.ca", "workbc.ca", "saskjobs.ca",
-        "eluta.ca", "workopolis.com", "charityvillage.com", "kijiji.ca"
+        "jobbank.gc.ca", "ca.indeed.com", "monster.ca", "linkedin.com", 
+        "glassdoor.com", "eluta.ca", "workopolis.com"
     ],
     "USA": [
-        "usajobs.gov", "careeronestop.org", "governmentjobs.com", "snagajob.com",
-        "dice.com", "idealist.org", "flexjobs.com", "caljobs.ca.gov",
-        "workintexas.com"
+        "indeed.com", "ziprecruiter.com", "monster.com", "linkedin.com", 
+        "glassdoor.com", "simplyhired.com", "careerbuilder.com", "usajobs.gov"
     ],
     "Mexico": [
-        "empleo.gob.mx", "trabajaen.gob.mx", "occ.com.mx", "computrabajo.com.mx",
-        "bumeran.com.mx", "empleonuevo.com", "trabajosdiarios.com.mx"
+        "occ.com.mx", "computrabajo.com.mx", "mx.indeed.com", 
+        "linkedin.com", "glassdoor.com", "bumeran.com.mx"
     ],
     "Panama": [
-        "mitradel.gob.pa", "empleospanama.gob.pa", "computrabajo.com.pa",
-        "konzerta.com", "encuentra24.com", "estascontratado.com"
+        "computrabajo.com.pa", "pa.indeed.com", "linkedin.com", 
+        "glassdoor.com", "konzerta.com", "encuentra24.com"
     ],
     "Brazil": [
-        "empregabrasil.mte.gov.br", "catho.com.br", "infojobs.com.br",
-        "vagas.com.br", "gupy.io", "empregos.com.br", "trabalhabrasil.com.br"
+        "catho.com.br", "infojobs.com.br", "br.indeed.com", 
+        "linkedin.com", "glassdoor.com", "vagas.com.br", "gupy.io"
     ],
     "Argentina": [
-        "portalempleo.gob.ar", "computrabajo.com.ar", "zonajobs.com.ar",
-        "bumeran.com.ar", "empleos.clarin.com", "revistaempleo.com"
+        "computrabajo.com.ar", "zonajobs.com.ar", "ar.indeed.com", 
+        "linkedin.com", "glassdoor.com", "bumeran.com.ar"
     ],
     "Italy": [
-        "cliclavoro.gov.it", "lavoro.gov.it", "inpa.gov.it", "infojobs.it",
-        "subito.it", "bakeca.it", "biancolavoro.it", "trovajob.it"
+        "infojobs.it", "monster.it", "it.indeed.com", "linkedin.com", 
+        "glassdoor.com", "subito.it", "lavoro.gov.it"
     ],
     "Turkey": [
-        "iskur.gov.tr", "kariyerkapisi.cbiko.gov.tr", "kariyer.net",
-        "yenibiris.com", "eleman.net", "elemanonline.com.tr", "isinolsun.com"
+        "kariyer.net", "yenibiris.com", "tr.indeed.com", "linkedin.com", 
+        "glassdoor.com", "iskur.gov.tr", "eleman.net"
     ],
     "Azerbaijan": [
-        "mas.gov.az", "sosial.gov.az", "boss.az", "jobsearch.az",
-        "tap.az", "rabota.az", "busy.az", "hellojob.az"
+        "boss.az", "jobsearch.az", "linkedin.com", "glassdoor.com", 
+        "tap.az", "bina.az", "rabota.az"
     ],
     "Georgia": [
-        "worknet.moh.gov.ge", "hr.gov.ge", "jobs.ge", "hr.ge",
-        "ss.ge", "myjobs.ge", "dasaqmeba.ge"
+        "jobs.ge", "hr.ge", "linkedin.com", "glassdoor.com", 
+        "ss.ge", "myjobs.ge"
     ],
     "Spain": [
-        "sepe.es", "empleate.gob.es", "administracion.gob.es", "infojobs.net",
-        "tecnoempleo.com", "turijobs.com", "trabajos.com", "milanuncios.com"
+        "infojobs.net", "es.indeed.com", "linkedin.com", "glassdoor.com", 
+        "tecnoempleo.com", "turijobs.com", "trabajos.com"
     ],
     "Greece": [
-        "dypa.gov.gr", "asep.gr", "kariera.gr", "xe.gr",
-        "skywalker.gr", "ergasia.gr", "jobfind.gr"
+        "kariera.gr", "gr.indeed.com", "linkedin.com", "glassdoor.com", 
+        "xe.gr", "skywalker.gr", "ergasia.gr"
     ]
 }
