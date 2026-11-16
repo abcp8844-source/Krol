@@ -48,16 +48,20 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
-    country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"], "Visa": ["visa apply"], "Travel": ["travel tour"]})
+    country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {})
     
     if not domains:
         print(f"[TRACE-STOP] No domains configured for country: {target_country}")
         return False
         
     if isinstance(country_kw_dict, dict):
-        keywords = list(country_kw_dict.get(category, ["apply now"]))
+        keywords = list(country_kw_dict.get(category, []))
     else:
         keywords = list(country_kw_dict)
+
+    if not keywords:
+        print(f"[TRACE-STOP] No keywords found for category [{category}] in country [{target_country}]")
+        return False
 
     shuffled_cities = list(cities)
     random.shuffle(shuffled_cities)
@@ -239,7 +243,7 @@ def run_independent_crawler():
         )
         
         page = context.new_page()
-        page.set_default_timeout(20000)
+        page.set_default_timeout(350000)
 
         try:
             print(f"\n--------------------------------------------------")
