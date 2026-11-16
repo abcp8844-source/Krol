@@ -1,4 +1,4 @@
-Name: Gemini Search
+name: Gemini Search 
 
 on:
   schedule:
