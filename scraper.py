@@ -44,18 +44,13 @@ def is_already_scraped(url):
 
 def deep_scroll_page(driver):
     try:
-        print(f"[TRACE-SCROLL] Initiating deep scroll to load dynamic elements...")
-        last_height = driver.execute_script("return document.body.scrollHeight")
-        for _ in range(4):
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2.5)
-            new_height = driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
-                break
-            last_height = new_height
-        print(f"[TRACE-SCROLL] Deep scroll completed successfully.")
+        print(f"[TRACE-SCROLL] Initiating quick scroll...")
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+        time.sleep(1.5)
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(1.5)
     except Exception as e:
-        print(f"[TRACE-SCROLL-WARN] Scroll encountered an issue: {e}")
+        pass
 
 def search_and_insert_post(driver, target_country, category, current_year, blocked_url_terms):
     print(f"\n==================================================")
@@ -78,140 +73,154 @@ def search_and_insert_post(driver, target_country, category, current_year, block
     if not keywords:
         keywords = ["apply now"]
 
-    print(f"[TRACE-INFO] Total Domains to check: {len(domains)}")
-    print(f"[TRACE-INFO] Total Keywords to check: {len(keywords)}")
-    print(f"[TRACE-INFO] Total Cities to check: {len(cities)}")
+    print(f"[TRACE-INFO] Total Domains: {len(domains)} | Keywords: {len(keywords)} | Cities: {len(cities)}")
 
     for target_domain in domains:
-        print(f"\n  [TRACE-DOMAIN] Shifting to Domain -> [https://www.{target_domain}]")
+        print(f"\n  [TRACE-DOMAIN] Evaluating Domain -> [https://www.{target_domain}]")
         
+        base_domain_url = f"https://www.{target_domain}"
+        try:
+            driver.get(base_domain_url)
+            time.sleep(2)
+            current_loaded_url = driver.current_url
+            if not current_loaded_url or "error" in current_loaded_url.lower() or "404" in driver.page_source:
+                print(f"  [TRACE-REJECT] Domain [{target_domain}] failed to reach target main menu/page. Skipping to next domain.")
+                continue
+            print(f"  [TRACE-CONNECTED] Successfully reached main portal of [{target_domain}]")
+        except Exception as conn_err:
+            print(f"  [TRACE-ERROR] Connection failed for [{target_domain}]: {conn_err}. Moving to next domain.")
+            continue
+
+        domain_has_content = False
+
         for keyword in keywords:
-            print(f"    [TRACE-QUERY] Testing Keyword/Query -> [{keyword}] on Domain -> [{target_domain}]")
+            encoded_kw = keyword.replace(" ", "%20")
             
             for target_city in cities:
-                print(f"      [TRACE-CITY] Targeting City -> [{target_city}] with Keyword -> [{keyword}]")
-                
-                # Advanced dynamic search paths mimicking real user queries on major job/classified platforms
-                encoded_kw = keyword.replace(" ", "%20")
                 encoded_city = target_city.replace(" ", "%20")
                 
-                search_urls = [
-                    f"https://www.{target_domain}/jobs/search/?q={encoded_kw}&location={encoded_city}",
-                    f"https://www.{target_domain}/search/?q={encoded_kw}",
-                    f"https://www.{target_domain}/jobs?q={encoded_kw}&l={encoded_city}",
-                    f"https://www.{target_domain}/jobs/{encoded_city.lower()}/?q={encoded_kw}",
-                    f"https://www.{target_domain}/jobs/",
-                    f"https://www.{target_domain}/careers",
-                    f"https://www.{target_domain}"
-                ]
+                s_url = f"https://www.{target_domain}/jobs?q={encoded_kw}&l={encoded_city}"
                 
-                for s_url in search_urls:
-                    try:
-                        print(f"        [TRACE-NAV] Opening URL: {s_url}")
-                        driver.get(s_url)
-                        time.sleep(3)
-                        
-                        deep_scroll_page(driver)
-                        
-                        soup = BeautifulSoup(driver.page_source, 'html.parser')
-                        candidate_links = []
-                        
-                        job_path_identifiers = [
-                            "/job", "/vacancy", "/vagas", "/loker", "/emploi", "/career", 
-                            "/hiring", "/position", "/listing", "/item", "/post", "/details"
-                        ]
+                try:
+                    print(f"    [TRACE-NAV] Hitting URL -> Domain: {target_domain} | Keyword: '{keyword}' | City: '{target_city}'")
+                    driver.get(s_url)
+                    time.sleep(2)
+                    
+                    deep_scroll_page(driver)
+                    
+                    soup = BeautifulSoup(driver.page_source, 'html.parser')
+                    candidate_links = []
+                    
+                    job_path_identifiers = [
+                        "/job", "/vacancy", "/vagas", "/loker", "/emploi", "/career", 
+                        "/hiring", "/position", "/listing", "/item", "/post", "/details"
+                    ]
 
-                        for a in soup.find_all('a', href=True):
-                            href = a['href']
-                            txt = a.get_text().strip()
-                            
-                            if any(bad in href.lower() or bad in txt.lower() for bad in blocked_url_terms):
-                                continue
-                                
-                            if href.startswith('/'):
-                                full_link = f"https://www.{target_domain}{href}"
-                            elif href.startswith('http'):
-                                full_link = href
-                            else:
-                                continue
-                                
-                            if full_link.rstrip('/') == f"https://www.{target_domain}":
-                                continue
-                            
-                            is_valid_job_link = any(ind in full_link.lower() for ind in job_path_identifiers) or len(txt) > 6
-                            
-                            if is_valid_job_link:
-                                title_candidate = txt if len(txt) > 5 else f"Job Opening for {keyword} in {target_city}"
-                                candidate_links.append((full_link, title_candidate))
-
-                        unique_candidates = list(dict(candidate_links).items())
-                        print(f"        [TRACE-PARSE] Discovered {len(unique_candidates)} unique candidate links from URL.")
-
-                        if not unique_candidates:
-                            print(f"        [TRACE-EMPTY] No candidate links found on URL: {s_url}. Moving to next check...")
+                    for a in soup.find_all('a', href=True):
+                        href = a['href']
+                        txt = a.get_text().strip()
+                        
+                        if any(bad in href.lower() or bad in txt.lower() for bad in blocked_url_terms):
                             continue
-
-                        for j_link, j_title in unique_candidates[:20]:
-                            if is_already_scraped(j_link):
-                                print(f"          [TRACE-DB-SKIP] Link already exists in database: {j_link}")
-                                continue
                             
-                            print(f"          [TRACE-EXTRACT] Deep extracting details from link: {j_link}")
-                            enriched_data = extract_strict_job_details(
-                                driver, j_link, target_country, target_city, category
+                        if href.startswith('/'):
+                            full_link = f"https://www.{target_domain}{href}"
+                        elif href.startswith('http'):
+                            full_link = href
+                        else:
+                            continue
+                            
+                        if full_link.rstrip('/') == f"https://www.{target_domain}":
+                            continue
+                        
+                        is_valid_job_link = any(ind in full_link.lower() for ind in job_path_identifiers) or len(txt) > 6
+                        
+                        if is_valid_job_link:
+                            title_candidate = txt if len(txt) > 5 else f"Job Opening for {keyword} in {target_city}"
+                            candidate_links.append((full_link, title_candidate))
+
+                    unique_candidates = list(dict(candidate_links).items())
+                    
+                    if not unique_candidates:
+                        fallback_url = f"https://www.{target_domain}/jobs"
+                        try:
+                            driver.get(fallback_url)
+                            time.sleep(2)
+                            soup_fb = BeautifulSoup(driver.page_source, 'html.parser')
+                            for a in soup_fb.find_all('a', href=True):
+                                href = a['href']
+                                txt = a.get_text().strip()
+                                if any(bad in href.lower() or bad in txt.lower() for bad in blocked_url_terms):
+                                    continue
+                                full_link = f"https://www.{target_domain}{href}" if href.startswith('/') else href if href.startswith('http') else ""
+                                if full_link and any(ind in full_link.lower() for ind in job_path_identifiers):
+                                    unique_candidates.append((full_link, txt if len(txt) > 5 else f"Job Opening in {target_country}"))
+                        except:
+                            pass
+                        unique_candidates = list(dict(unique_candidates).items())
+
+                    print(f"      [TRACE-PARSE] Discovered {len(unique_candidates)} candidate links.")
+
+                    if not unique_candidates:
+                        continue
+
+                    domain_has_content = True
+
+                    for j_link, j_title in unique_candidates[:8]:
+                        if is_already_scraped(j_link):
+                            continue
+                        
+                        print(f"        [TRACE-EXTRACT] Deep extracting details: {j_link}")
+                        enriched_data = extract_strict_job_details(
+                            driver, j_link, target_country, target_city, category
+                        )
+                        
+                        if enriched_data and enriched_data.get('finalUrl'):
+                            final_url = enriched_data['finalUrl']
+                            if is_already_scraped(final_url):
+                                continue
+                                
+                            final_title = format_strict_title(
+                                j_title, keyword, target_city, target_country, current_year
                             )
                             
-                            if enriched_data and enriched_data.get('finalUrl'):
-                                final_url = enriched_data['finalUrl']
-                                if is_already_scraped(final_url):
-                                    print(f"          [TRACE-DB-SKIP] Final URL already exists in database: {final_url}")
-                                    continue
-                                    
-                                final_title = format_strict_title(
-                                    j_title, keyword, target_city, target_country, current_year
-                                )
-                                
-                                cta_parts = []
-                                if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
-                                    cta_parts.append(f"Estimated Amount/Salary: {enriched_data['salary']}")
-                                if enriched_data.get("location"):
-                                    cta_parts.append(f"Location/City: {enriched_data['location']}")
-                                if enriched_data.get("phone"):
-                                    cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
-                                if enriched_data.get("email"):
-                                    cta_parts.append(f"Email: {enriched_data['email']}")
-                                cta_parts.append(f"Direct Apply Link: {final_url}")
+                            cta_parts = []
+                            if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
+                                cta_parts.append(f"Estimated Amount/Salary: {enriched_data['salary']}")
+                            if enriched_data.get("location"):
+                                cta_parts.append(f"Location/City: {enriched_data['location']}")
+                            if enriched_data.get("phone"):
+                                cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
+                            if enriched_data.get("email"):
+                                cta_parts.append(f"Email: {enriched_data['email']}")
+                            cta_parts.append(f"Direct Apply Link: {final_url}")
 
-                                final_snippet = enriched_data.get("snippet", "") + "\n\nDetails:\n" + "\n".join(cta_parts)
+                            final_snippet = enriched_data.get("snippet", "") + "\n\nDetails:\n" + "\n".join(cta_parts)
 
-                                insert_data = {
-                                    'title': final_title,
-                                    'snippet': final_snippet,
-                                    'link': final_url,
-                                    'country': f"{target_country} ({target_city})",
-                                    'category': category,
-                                    'query_used': f"Query: {keyword} on {target_domain}",
-                                    'status': 'pending',
-                                    'audit_status': None
-                                }
+                            insert_data = {
+                                'title': final_title,
+                                'snippet': final_snippet,
+                                'link': final_url,
+                                'country': f"{target_country} ({target_city})",
+                                'category': category,
+                                'query_used': f"Query: {keyword} on {target_domain}",
+                                'status': 'pending',
+                                'audit_status': None
+                            }
+                            
+                            try:
+                                supabase.table("zunex").insert(insert_data).execute()
+                                print(f"  [TRACE-SUCCESS] POST SECURED & INSERTED! Country: {target_country} ({target_city}) | Domain: {target_domain}")
+                                return True
+                            except Exception as db_err:
+                                print(f"  [TRACE-DB-ERROR] Insertion failed: {db_err}")
                                 
-                                try:
-                                    print(f"          [TRACE-DB-INSERT] Attempting insertion into Supabase...")
-                                    supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"  [TRACE-SUCCESS] POST SECURED & INSERTED! Country: {target_country} ({target_city}) | Domain: {target_domain} | Keyword: '{keyword}'")
-                                    return True
-                                except Exception as db_err:
-                                    print(f"  [TRACE-DB-ERROR] Insertion failed: {db_err}")
-                            else:
-                                print(f"          [TRACE-REJECT] Extracted data was invalid or empty for link: {j_link}")
-                                    
-                    except Exception as nav_err:
-                        print(f"        [TRACE-NAV-ERROR] Error browsing URL {s_url}: {nav_err}")
-                        continue
+                except Exception as nav_err:
+                    continue
         
-        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] fully exhausted across all queries and cities. Shifting to next domain...")
+        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] exhausted or unresponsive. Moving to next domain immediately.")
 
-    print(f"[TRACE-COUNTRY-EXHAUST] All domains, queries, and cities exhausted for country [{target_country}] in category [{category}] without a match.")
+    print(f"[TRACE-COUNTRY-EXHAUST] All domains exhausted for country [{target_country}] in category [{category}].")
     return False
 
 def run_independent_crawler():
@@ -245,7 +254,7 @@ def run_independent_crawler():
     driver = webdriver.Chrome(options=options)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     driver.set_window_size(1366, 768)
-    driver.set_page_load_timeout(35)
+    driver.set_page_load_timeout(30)
 
     blocked_url_terms = [
         "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", 
@@ -266,7 +275,7 @@ def run_independent_crawler():
         print(f"--------------------------------------------------")
         visa_collected = 0
         visa_attempts = 0
-        while visa_collected < 2 and visa_attempts < 20:
+        while visa_collected < 2 and visa_attempts < 15:
             visa_countries = list(day_countries)
             random.shuffle(visa_countries)
             for country in visa_countries:
@@ -283,7 +292,7 @@ def run_independent_crawler():
         print(f"--------------------------------------------------")
         travel_collected = 0
         travel_attempts = 0
-        while travel_collected < 2 and travel_attempts < 20:
+        while travel_collected < 2 and travel_attempts < 15:
             travel_countries = list(day_countries)
             random.shuffle(travel_countries)
             for country in travel_countries:
