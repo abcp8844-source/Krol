@@ -94,7 +94,7 @@ def run_cleaner():
         if new_title == "API_ERROR" or new_snippet == "API_ERROR":
             continue
 
-        if new_snippet is None or str(new_snippet).strip() == "":
+        if new_snippet is None or str(new_snippet).strip() == "" or new_title is None or str(new_title).strip() == "":
             update_payload = {
                 "snippet": None,
                 "status": "success",
@@ -104,14 +104,14 @@ def run_cleaner():
             supabase.table("zunex").update(update_payload).eq("id", post_id).execute()
         else:
             update_payload = {
-                "title": new_title if new_title else old_title,
+                "title": new_title,
                 "snippet": new_snippet,
                 "audit_status": "success",
                 "updated_at": current_timestamp
             }
             supabase.table("zunex").update(update_payload).eq("id", post_id).execute()
 
-        time.sleep(10)
+        time.sleep(8)
 
 if __name__ == "__main__":
     run_cleaner()
