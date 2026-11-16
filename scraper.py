@@ -53,14 +53,13 @@ def search_and_insert_job_for_country(driver, target_country, current_year, bloc
                 search_urls = [
                     f"https://{target_domain}/jobs?q={keyword}&l={target_city}",
                     f"https://{target_domain}/search?q={keyword}",
-                    f"https://{target_domain}/jobs/{keyword}",
-                    f"https://{target_domain}/vagas-{keyword}",
-                    f"https://{target_domain}"
+                    f"https://{target_domain}",
+                    f"https://www.{target_domain}"
                 ]
                 for s_url in search_urls:
                     try:
                         driver.get(s_url)
-                        time.sleep(5)
+                        time.sleep(2)
                         soup = BeautifulSoup(driver.page_source, 'html.parser')
                         candidate_links = []
                         for a in soup.find_all('a', href=True):
@@ -77,10 +76,10 @@ def search_and_insert_job_for_country(driver, target_country, current_year, bloc
                             if full_link.rstrip('/') == f"https://{target_domain}":
                                 continue
                             title_text = a.get_text().strip()
-                            if len(title_text) > 10:
+                            if len(title_text) > 8:
                                 candidate_links.append((full_link, title_text))
 
-                        for j_link, j_title in candidate_links[:20]:
+                        for j_link, j_title in candidate_links[:30]:
                             if is_already_scraped(j_link):
                                 continue
                             
@@ -98,8 +97,6 @@ def search_and_insert_job_for_country(driver, target_country, current_year, bloc
                                 final_title = format_strict_title(
                                     j_title, keyword, target_city, target_country, current_year
                                 )
-                                if target_country.lower() not in final_title.lower() and target_city.lower() not in final_title.lower():
-                                    continue
                                 
                                 cta_parts = []
                                 if enriched_data["salary"] != "Not Specified":
@@ -126,7 +123,6 @@ def search_and_insert_job_for_country(driver, target_country, current_year, bloc
                                 }
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    time.sleep(5)
                                     return True
                                 except Exception:
                                     pass
@@ -171,7 +167,7 @@ def run_independent_crawler():
             while not inserted:
                 inserted = search_and_insert_job_for_country(driver, country, current_year, blocked_url_terms)
                 if not inserted:
-                    time.sleep(5)
+                    time.sleep(1)
 
     except Exception:
         pass
