@@ -91,7 +91,8 @@ def is_already_scraped(url):
     try:
         res = supabase.table("zunex").select("id").eq("link", url).execute()
         return len(res.data) > 0
-    except Exception:
+    except Exception as e:
+        print(f"[DB-CHECK-ERROR] {e}")
         return False
 
 def search_and_generate_job_via_gemini(country, city, query_template, year):
@@ -102,6 +103,7 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
     
     for model_name in models_to_try:
         try:
+            print(f"[MODEL] Trying {model_name} for {city}, {country}...")
             response = gemini_client.models.generate_content(
                 model=model_name,
                 contents=prompt,
@@ -134,10 +136,15 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
                 final_link = data.get("link") or grounded_url
                 if data.get("found") and final_link and data.get("title") and data.get("snippet"):
                     data["link"] = final_link
+                    print(f"[SUCCESS] Valid job found via {model_name}!")
                     return data
+            else:
+                print(f"[WARNING] Empty response from {model_name}")
         except Exception as e:
             err_str = str(e)
+            print(f"[ERROR] Model {model_name} failed: {err_str}")
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                print(f"[QUOTA] Rate limit hit. Sleeping 10s before fallback...")
                 time.sleep(10)
             continue
             
@@ -145,6 +152,7 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
 
 def run_search():
     if not supabase or not gemini_client:
+        print("[CRITICAL] Supabase or Gemini client missing.")
         return
 
     today = datetime.now().strftime("%A")
@@ -152,7 +160,13 @@ def run_search():
     countries = SCHEDULE.get(today, [])
 
     if not countries:
+        print(f"[INFO] No countries scheduled for {today}.")
         return
+
+    print(f"\n==========================================")
+    print(f"=== ZUNEX SEARCH STARTED | {today} | {current_year} ===")
+    print(f"=== Countries: {countries} ===")
+    print(f"==========================================")
 
     for country in countries:
         cities = COUNTRY_CITIES.get(country, [country])
@@ -164,6 +178,7 @@ def run_search():
         shuffled_queries = list(QUERIES)
         random.shuffle(shuffled_queries)
         
+        print(f"\n--- Processing Country: {country} ---")
         for query_template in shuffled_queries:
             if country_secured or attempts >= 2:
                 break
@@ -171,6 +186,7 @@ def run_search():
             attempts += 1
             selected_city = random.choice(cities)
             
+            print(f"Attempt {attempts} | City: {selected_city}")
             job_data = search_and_generate_job_via_gemini(country, selected_city, query_template, current_year)
             
             if job_data:
@@ -179,6 +195,7 @@ def run_search():
                 snippet = job_data.get("snippet")
                 
                 if is_already_scraped(link):
+                    print(f"[SKIP] Link already exists in DB: {link}")
                     continue
                 
                 current_timestamp = datetime.now(timezone.utc).isoformat()
@@ -197,14 +214,23 @@ def run_search():
                 
                 try:
                     supabase.table("zunex").insert(insert_data).execute()
+                    print(f"[SAVED] Job successfully inserted into Supabase for {country} ({selected_city})")
                     country_secured = True
-                except Exception:
-                    pass
+                except Exception as db_err:
+                    print(f"[DB-ERROR] Failed to insert: {db_err}")
+            else:
+                print(f"[INFO] No valid job returned for this attempt.")
             
             if not country_secured:
+                print(f"Waiting 15 seconds before next query...")
                 time.sleep(15)
 
+        print(f"Finished {country}. Taking a strict 1-minute break before next country...")
         time.sleep(60)
+
+    print(f"\n==========================================")
+    print(f"=== ZUNEX SEARCH COMPLETED SUCCESSFULLY ===")
+    print(f"==========================================")
 
 if __name__ == "__main__":
     run_search()
