@@ -42,11 +42,16 @@ def is_already_scraped(url):
         return False
 
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
+    print(f"\n==================================================")
+    print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
+    print(f"==================================================")
+
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
     country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"], "Visa": ["visa apply"], "Travel": ["travel tour"]})
     
     if not domains:
+        print(f"[TRACE-STOP] No domains configured for country: {target_country}")
         return False
         
     if isinstance(country_kw_dict, dict):
@@ -60,6 +65,8 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     random.shuffle(shuffled_domains)
     shuffled_keywords = list(keywords)
     random.shuffle(shuffled_keywords)
+
+    print(f"[TRACE-INFO] Config -> Domains: {len(shuffled_domains)} | Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)}")
 
     for target_city in shuffled_cities:
         for target_domain in shuffled_domains:
@@ -76,6 +83,9 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                         page.goto(s_url, timeout=20000)
                         time.sleep(3)
                         
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(1.5)
+
                         raw_links = page.eval_on_selector_all(
                             "a[href]",
                             """elements => elements.map(el => ({
@@ -113,8 +123,9 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             enriched_data = extract_strict_job_details(
                                 page, j_link, target_country, target_city, category
                             )
-                            if enriched_data:
+                            if enriched_data and enriched_data.get('finalUrl'):
                                 if is_already_scraped(enriched_data['finalUrl']):
+                                    print(f"[TRACE-REJECT] Final URL already scraped.")
                                     continue
                                 final_title = format_strict_title(
                                     j_title, keyword, target_city, target_country, current_year
@@ -123,17 +134,17 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                     continue
                                 
                                 cta_parts = []
-                                if enriched_data["salary"] != "Not Specified":
+                                if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
                                     cta_parts.append(f"Estimated Amount/Salary: {enriched_data['salary']}")
-                                if enriched_data["location"]:
+                                if enriched_data.get("location"):
                                     cta_parts.append(f"Location/City: {enriched_data['location']}")
-                                if enriched_data["phone"]:
+                                if enriched_data.get("phone"):
                                     cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
-                                if enriched_data["email"]:
+                                if enriched_data.get("email"):
                                     cta_parts.append(f"Email: {enriched_data['email']}")
                                 cta_parts.append(f"Direct Apply Link: {enriched_data['finalUrl']}")
 
-                                final_snippet = enriched_data["snippet"] + "\n\nDetails:\n" + "\n".join(cta_parts)
+                                final_snippet = enriched_data.get("snippet", "") + "\n\nDetails:\n" + "\n".join(cta_parts)
 
                                 insert_data = {
                                     'title': final_title,
@@ -177,8 +188,8 @@ def run_independent_crawler():
 
     blocked_url_terms = [
         "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", 
-        "order", "sort", "filter", ", "help", "aviso", "ads", "forgot", "download",
-        "/", "/career-advice", "/resume", "/blog", "", "/resources", "", "/about", "/contact"
+        "order", "sort", "filter", "search?", "help", "aviso", "ads", "forgot", "download",
+        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources", "/employers", "/about", "/contact"
     ]
 
     with sync_playwright() as p:
