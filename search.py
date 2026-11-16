@@ -96,30 +96,12 @@ def is_already_scraped(url):
 
 def search_and_generate_job_via_gemini(country, city, query_template, year):
     formatted_query = query_template.format(city=city, c=country, y=year)
-    
-    prompt = f"""
-    You are an automated global job researcher.
-    Target Country: {country}
-    Target City: {city}
-    Search Query to execute via live Google Search Grounding: "{formatted_query}"
+    prompt = f"Search and find the single best, latest real-time job in {city}, {country} using this query: '{formatted_query}'. Rules: 1. Provide the direct job application URL (never a root homepage). 2. Extract comprehensive details (role description, salary, contact email/phone, company name, requirements) to form a clean snippet of at least 400 words. 3. Return ONLY a valid JSON with keys: 'found' (true/false), 'title', 'link', 'snippet'."
 
-    STRICT RULES:
-    1. Execute the search query using Google Search Grounding and pick the single top, latest, real-time job listing located in {city}, {country}.
-    2. Extract the exact URL of that specific job posting page. NEVER return a homepage or root domain.
-    3. ZERO SELF-WRITING / ZERO FABRICATION: Do NOT write your own fictional filler text. Extract and compile the exact real facts from the search result page—minimum 400 words equivalent of authentic job details (full role description, requirements, responsibilities, company name, salary, exact location, phone/email contact, and direct application steps).
-    4. If the listing is in the local language of {country}, extract it cleanly in that language or translate accurately without losing any original facts.
-    5. Return strictly a valid JSON object with keys:
-       - "found": true or false
-       - "title": Exact professional job title with company and city
-       - "link": Direct URL of the actual job page
-       - "snippet": Detailed factual text (400+ words) containing all extracted job information, salary, contact details, and apply link.
-    """
-
-    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"]
+    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
     
     for model_name in models_to_try:
         try:
-            print(f"[MODEL] Trying {model_name}...")
             response = gemini_client.models.generate_content(
                 model=model_name,
                 contents=prompt,
@@ -156,17 +138,13 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
         except Exception as e:
             err_str = str(e)
             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                print(f"[QUOTA-LIMIT] Model {model_name} hit rate limit (429). Waiting 20 seconds before trying next model...")
-                time.sleep(20)
-            else:
-                print(f"[WARNING] Model {model_name} failed: {err_str}")
+                time.sleep(10)
             continue
             
     return None
 
 def run_search():
     if not supabase or not gemini_client:
-        print("[CRITICAL ERROR] Supabase or Gemini client not initialized.")
         return
 
     today = datetime.now().strftime("%A")
@@ -174,13 +152,7 @@ def run_search():
     countries = SCHEDULE.get(today, [])
 
     if not countries:
-        print(f"[INFO] No countries scheduled for today ({today}).")
         return
-
-    print(f"\n==================================================")
-    print(f"=== ZUNEX GEMINI SEARCH STARTED | Day: {today} | Year: {current_year} ===")
-    print(f"=== Scheduled Countries: {countries} ===")
-    print(f"==================================================")
 
     for country in countries:
         cities = COUNTRY_CITIES.get(country, [country])
@@ -189,7 +161,6 @@ def run_search():
         country_secured = False
         attempts = 0
         
-        # Shuffle queries for this country
         shuffled_queries = list(QUERIES)
         random.shuffle(shuffled_queries)
         
@@ -200,9 +171,6 @@ def run_search():
             attempts += 1
             selected_city = random.choice(cities)
             
-            print(f"\n[COUNTRY: {country}] Attempt {attempts} | City: {selected_city}")
-            print(f"[QUERY] {query_template.format(city=selected_city, c=country, y=current_year)}")
-
             job_data = search_and_generate_job_via_gemini(country, selected_city, query_template, current_year)
             
             if job_data:
@@ -211,7 +179,6 @@ def run_search():
                 snippet = job_data.get("snippet")
                 
                 if is_already_scraped(link):
-                    print(f"[DB-SKIP] Link already exists in zunex: {link}")
                     continue
                 
                 current_timestamp = datetime.now(timezone.utc).isoformat()
@@ -230,26 +197,14 @@ def run_search():
                 
                 try:
                     supabase.table("zunex").insert(insert_data).execute()
-                    print(f"[SUCCESS] JOB INSERTED INTO ZUNEX -> {country} ({selected_city})")
-                    print(f"   - Title: {title}")
-                    print(f"   - Link: {link}")
                     country_secured = True
-                except Exception as db_err:
-                    print(f"[DB-ERROR] Insert failed: {str(db_err)}")
-            else:
-                print(f"[INFO] No valid job returned for {country} on this attempt.")
+                except Exception:
+                    pass
             
             if not country_secured:
-                print(f"[SLEEP] Waiting 20 seconds before trying next shuffled query...")
-                time.sleep(20)
+                time.sleep(15)
 
-        # Strict 1-minute (60 seconds) break after finishing each country
-        print(f"\n[BREAK] Country [{country}] completed or exhausted. Taking a strict 1-minute (60 seconds) break before the next country...")
         time.sleep(60)
-
-    print(f"\n==================================================")
-    print(f"=== ZUNEX GEMINI SEARCH COMPLETED SUCCESSFULLY ===")
-    print(f"==================================================")
 
 if __name__ == "__main__":
     run_search()
