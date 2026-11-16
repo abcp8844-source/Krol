@@ -74,7 +74,7 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                 for s_url in search_urls:
                     try:
                         driver.get(s_url)
-                        time.sleep(5)
+                        time.sleep(1)
                         soup = BeautifulSoup(driver.page_source, 'html.parser')
                         candidate_links = []
                         for a in soup.find_all('a', href=True):
@@ -134,7 +134,7 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                                 }
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    time.sleep(5)
+                                    time.sleep(1)
                                     return True
                                 except Exception:
                                     pass
