@@ -12,6 +12,18 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0"
 ]
 
+# Playwright Optimized Browser Settings
+PLAYWRIGHT_CONFIG = {
+    "headless": True,
+    "viewport": {"width": 1366, "height": 768},
+    "args": [
+        "--disable-gpu",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled"
+    ]
+}
+
 SCHEDULE = {
     "Monday": ["UAE", "Saudi Arabia", "Qatar", "Bahrain", "Kuwait", "Oman"],
     "Tuesday": ["Japan", "South Korea", "China", "Taiwan", "Singapore", "Hong Kong"],
