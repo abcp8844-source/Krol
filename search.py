@@ -115,7 +115,7 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
        - "snippet": Detailed factual text (400+ words) containing all extracted job information, salary, contact details, and apply link.
     """
 
-    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
+    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
     
     for model_name in models_to_try:
         try:
@@ -138,7 +138,6 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
                 
                 data = json.loads(raw_text)
                 
-                # Verify grounded source URL if available in metadata
                 grounded_url = None
                 try:
                     chunks = response.candidates[0].grounding_metadata.grounding_chunks
