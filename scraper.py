@@ -42,9 +42,24 @@ def is_already_scraped(url):
     except Exception:
         return False
 
+def deep_scroll_page(driver):
+    try:
+        print(f"[TRACE-SCROLL] Initiating deep scroll to load dynamic elements...")
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        for _ in range(3):
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+        print(f"[TRACE-SCROLL] Deep scroll completed successfully.")
+    except Exception as e:
+        print(f"[TRACE-SCROLL-WARN] Scroll encountered an issue: {e}")
+
 def search_and_insert_post(driver, target_country, category, current_year, blocked_url_terms):
     print(f"\n==================================================")
-    print(f"[*] COUNTRY START: Picked Country -> [{target_country}] | Category -> [{category}]")
+    print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
     print(f"==================================================")
     
     cities = COUNTRY_CITIES.get(target_country, [target_country])
@@ -52,7 +67,7 @@ def search_and_insert_post(driver, target_country, category, current_year, block
     country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {})
     
     if not domains:
-        print(f"[X] REJECTED/STOP: No domains configured for country: {target_country}")
+        print(f"[TRACE-STOP] No domains configured for country: {target_country}")
         return False
         
     if isinstance(country_kw_dict, dict):
@@ -63,14 +78,18 @@ def search_and_insert_post(driver, target_country, category, current_year, block
     if not keywords:
         keywords = ["apply now"]
 
-    print(f"[INFO] Total Domains available for {target_country}: {len(domains)}")
-    print(f"[INFO] Total Keywords available for category {category}: {len(keywords)}")
+    print(f"[TRACE-INFO] Total Domains to check: {len(domains)}")
+    print(f"[TRACE-INFO] Total Keywords to check: {len(keywords)}")
+    print(f"[TRACE-INFO] Total Cities to check: {len(cities)}")
 
     for target_domain in domains:
-        print(f"\n  [-->] DOMAIN SHIFT: Moving to Domain -> [https://www.{target_domain}]")
+        print(f"\n  [TRACE-DOMAIN] Shifting to Domain -> [https://www.{target_domain}]")
+        
         for keyword in keywords:
-            print(f"    [KEYWORD] Testing Keyword -> [{keyword}] on Domain -> [{target_domain}]")
+            print(f"    [TRACE-QUERY] Testing Keyword/Query -> [{keyword}] on Domain -> [{target_domain}]")
+            
             for target_city in cities:
+                print(f"      [TRACE-CITY] Targeting City -> [{target_city}] with Keyword -> [{keyword}]")
                 search_urls = [
                     f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
                     f"https://www.{target_domain}/search?q={keyword}+{target_city}",
@@ -80,9 +99,11 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                 
                 for s_url in search_urls:
                     try:
-                        print(f"      [REQUEST] Browsing URL: {s_url}")
+                        print(f"        [TRACE-NAV] Opening URL: {s_url}")
                         driver.get(s_url)
                         time.sleep(3)
+                        
+                        deep_scroll_page(driver)
                         
                         soup = BeautifulSoup(driver.page_source, 'html.parser')
                         candidate_links = []
@@ -108,17 +129,17 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                                 candidate_links.append((full_link, txt))
 
                         unique_candidates = list(dict(candidate_links).items())
-                        print(f"      [PARSE] Found {len(unique_candidates)} candidate links on page.")
+                        print(f"        [TRACE-PARSE] Discovered {len(unique_candidates)} unique candidate links from URL.")
 
                         if not unique_candidates:
-                            print(f"      [NOT FOUND] No valid candidate links found with keyword '{keyword}' on {s_url}. Switching to next...")
+                            print(f"        [TRACE-EMPTY] No candidate links found on URL: {s_url}. Moving to next check...")
 
                         for j_link, j_title in unique_candidates[:12]:
                             if is_already_scraped(j_link):
-                                print(f"        [SKIP/EXISTS] Link already scraped in DB: {j_link}")
+                                print(f"          [TRACE-DB-SKIP] Link already exists in database: {j_link}")
                                 continue
                             
-                            print(f"        [DEEP GROUNDING] Extracting details from link: {j_link}")
+                            print(f"          [TRACE-EXTRACT] Deep extracting details from link: {j_link}")
                             enriched_data = extract_strict_job_details(
                                 driver, j_link, target_country, target_city, category
                             )
@@ -126,7 +147,7 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                             if enriched_data and enriched_data.get('finalUrl'):
                                 final_url = enriched_data['finalUrl']
                                 if is_already_scraped(final_url):
-                                    print(f"        [SKIP/EXISTS] Final URL already scraped: {final_url}")
+                                    print(f"          [TRACE-DB-SKIP] Final URL already exists in database: {final_url}")
                                     continue
                                     
                                 final_title = format_strict_title(
@@ -158,25 +179,27 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                                 }
                                 
                                 try:
-                                    print(f"        [DB INSERT] Attempting to insert post into Supabase...")
+                                    print(f"          [TRACE-DB-INSERT] Attempting insertion into Supabase...")
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"  [SUCCESS] POST INSERTED SUCCESSFULLY! Country: {target_country} | Domain: {target_domain} | Keyword: '{keyword}'")
+                                    print(f"  [TRACE-SUCCESS] POST SECURED & INSERTED! Country: {target_country} ({target_city}) | Domain: {target_domain} | Keyword: '{keyword}'")
                                     return True
                                 except Exception as db_err:
-                                    print(f"  [DB ERROR] Insertion failed: {db_err}")
+                                    print(f"  [TRACE-DB-ERROR] Insertion failed: {db_err}")
                             else:
-                                print(f"        [REJECTED] Extracted data was empty or invalid for link: {j_link}")
+                                print(f"          [TRACE-REJECT] Extracted data was invalid or empty for link: {j_link}")
                                     
                     except Exception as nav_err:
-                        print(f"      [NAV ERROR] Exception occurred on URL {s_url}: {nav_err}")
+                        print(f"        [TRACE-NAV-ERROR] Error browsing URL {s_url}: {nav_err}")
                         continue
+        
+        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] fully exhausted across all queries and cities. Shifting to next domain...")
 
-    print(f"[X] EXHAUSTED: All domains and keywords exhausted for country [{target_country}] in category [{category}] without a match.")
+    print(f"[TRACE-COUNTRY-EXHAUST] All domains, queries, and cities exhausted for country [{target_country}] in category [{category}] without a match.")
     return False
 
 def run_independent_crawler():
     if not supabase:
-        print("[CRITICAL ERROR] Supabase client is not initialized.")
+        print("[TRACE-CRITICAL] Supabase client is not initialized.")
         return
 
     today = datetime.now().strftime("%A")
@@ -189,7 +212,7 @@ def run_independent_crawler():
     print(f"==================================================")
 
     if not day_countries:
-        print("[INFO] No countries scheduled for today.")
+        print("[TRACE-INFO] No countries scheduled for today.")
         return
 
     options = Options()
@@ -218,6 +241,7 @@ def run_independent_crawler():
         print(f"--- PHASE 1: STARTING JOB POSTS COLLECTION ------")
         print(f"--------------------------------------------------")
         for country in day_countries:
+            print(f"\n[PHASE-1-COUNTRY] Processing Country: {country}")
             search_and_insert_post(driver, country, "Jobs", current_year, blocked_url_terms)
 
         print(f"\n--------------------------------------------------")
@@ -225,41 +249,41 @@ def run_independent_crawler():
         print(f"--------------------------------------------------")
         visa_collected = 0
         visa_attempts = 0
-        while visa_collected < 2 and visa_attempts < 15:
+        while visa_collected < 2 and visa_attempts < 20:
             visa_countries = list(day_countries)
             random.shuffle(visa_countries)
             for country in visa_countries:
                 if visa_collected >= 2:
                     break
                 visa_attempts += 1
-                print(f"\n[VISA ATTEMPT {visa_attempts}] Shuffled country picked: [{country}]")
+                print(f"\n[PHASE-2-VISA-ATTEMPT {visa_attempts}] Shuffled country picked: [{country}]")
                 if search_and_insert_post(driver, country, "Visa", current_year, blocked_url_terms):
                     visa_collected += 1
-                    print(f"[VISA PROGRESS] Total Visa Posts Collected: {visa_collected}/2")
+                    print(f"[PHASE-2-VISA-PROGRESS] Total Visa Posts Collected: {visa_collected}/2")
 
         print(f"\n--------------------------------------------------")
         print(f"--- PHASE 3: STARTING TRAVEL POSTS COLLECTION ---")
         print(f"--------------------------------------------------")
         travel_collected = 0
         travel_attempts = 0
-        while travel_collected < 2 and travel_attempts < 15:
+        while travel_collected < 2 and travel_attempts < 20:
             travel_countries = list(day_countries)
             random.shuffle(travel_countries)
             for country in travel_countries:
                 if travel_collected >= 2:
                     break
                 travel_attempts += 1
-                print(f"\n[TRAVEL ATTEMPT {travel_attempts}] Shuffled country picked: [{country}]")
+                print(f"\n[PHASE-3-TRAVEL-ATTEMPT {travel_attempts}] Shuffled country picked: [{country}]")
                 if search_and_insert_post(driver, country, "Travel", current_year, blocked_url_terms):
                     travel_collected += 1
-                    print(f"[TRAVEL PROGRESS] Total Travel Posts Collected: {travel_collected}/2")
+                    print(f"[PHASE-3-TRAVEL-PROGRESS] Total Travel Posts Collected: {travel_collected}/2")
 
         print(f"\n==================================================")
         print("=== CRAWLER EXECUTION COMPLETED SUCCESSFULLY ===")
         print(f"==================================================")
 
     except Exception as e:
-        print(f"[CRITICAL ERROR] Crawler aborted due to exception: {e}")
+        print(f"[TRACE-CRITICAL-ERROR] Crawler aborted due to exception: {e}")
     finally:
         driver.quit()
 
