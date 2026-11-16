@@ -1,5 +1,5 @@
-selenium==4.52.0
-beautifulsoup4==4.15.0
-supabase==2.34.1
+playwright==1.49.0
+beautifulsoup4==4.12.3
+supabase==2.11.0
 google-genai==3.3.0
 requests==2.32.3
