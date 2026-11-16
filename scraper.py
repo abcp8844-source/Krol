@@ -46,9 +46,9 @@ def deep_scroll_page(driver):
     try:
         print(f"[TRACE-SCROLL] Initiating deep scroll to load dynamic elements...")
         last_height = driver.execute_script("return document.body.scrollHeight")
-        for _ in range(3):
+        for _ in range(4):
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
+            time.sleep(2.5)
             new_height = driver.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
                 break
@@ -90,10 +90,18 @@ def search_and_insert_post(driver, target_country, category, current_year, block
             
             for target_city in cities:
                 print(f"      [TRACE-CITY] Targeting City -> [{target_city}] with Keyword -> [{keyword}]")
+                
+                # Advanced dynamic search paths mimicking real user queries on major job/classified platforms
+                encoded_kw = keyword.replace(" ", "%20")
+                encoded_city = target_city.replace(" ", "%20")
+                
                 search_urls = [
-                    f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
-                    f"https://www.{target_domain}/search?q={keyword}+{target_city}",
-                    f"https://www.{target_domain}/search?q={keyword}",
+                    f"https://www.{target_domain}/jobs/search/?q={encoded_kw}&location={encoded_city}",
+                    f"https://www.{target_domain}/search/?q={encoded_kw}",
+                    f"https://www.{target_domain}/jobs?q={encoded_kw}&l={encoded_city}",
+                    f"https://www.{target_domain}/jobs/{encoded_city.lower()}/?q={encoded_kw}",
+                    f"https://www.{target_domain}/jobs/",
+                    f"https://www.{target_domain}/careers",
                     f"https://www.{target_domain}"
                 ]
                 
@@ -108,6 +116,11 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                         soup = BeautifulSoup(driver.page_source, 'html.parser')
                         candidate_links = []
                         
+                        job_path_identifiers = [
+                            "/job", "/vacancy", "/vagas", "/loker", "/emploi", "/career", 
+                            "/hiring", "/position", "/listing", "/item", "/post", "/details"
+                        ]
+
                         for a in soup.find_all('a', href=True):
                             href = a['href']
                             txt = a.get_text().strip()
@@ -124,17 +137,21 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                                 
                             if full_link.rstrip('/') == f"https://www.{target_domain}":
                                 continue
-                                
-                            if len(txt) > 10:
-                                candidate_links.append((full_link, txt))
+                            
+                            is_valid_job_link = any(ind in full_link.lower() for ind in job_path_identifiers) or len(txt) > 6
+                            
+                            if is_valid_job_link:
+                                title_candidate = txt if len(txt) > 5 else f"Job Opening for {keyword} in {target_city}"
+                                candidate_links.append((full_link, title_candidate))
 
                         unique_candidates = list(dict(candidate_links).items())
                         print(f"        [TRACE-PARSE] Discovered {len(unique_candidates)} unique candidate links from URL.")
 
                         if not unique_candidates:
                             print(f"        [TRACE-EMPTY] No candidate links found on URL: {s_url}. Moving to next check...")
+                            continue
 
-                        for j_link, j_title in unique_candidates[:12]:
+                        for j_link, j_title in unique_candidates[:20]:
                             if is_already_scraped(j_link):
                                 print(f"          [TRACE-DB-SKIP] Link already exists in database: {j_link}")
                                 continue
