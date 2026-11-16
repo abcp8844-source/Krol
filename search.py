@@ -98,49 +98,71 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
     formatted_query = query_template.format(city=city, c=country, y=year)
     
     prompt = f"""
-    You are an elite, highly precise automated global job hunter and researcher. 
+    You are an automated global job researcher.
     Target Country: {country}
     Target City: {city}
     Search Query to execute via live Google Search Grounding: "{formatted_query}"
 
-    STRICT INSTRUCTIONS:
-    1. Use Google Search Grounding to execute the exact search query and find the absolute top, best, latest, and most authentic real-time job opening specifically located in {city}, {country}.
-    2. Extract the DIRECT online application link or authoritative job page link. DO NOT provide root homepages, generic search result pages, or blocked sites. The link must point directly to the specific job listing page.
-    3. COMPREHENSIVE SNIPPET REQUIREMENT: The snippet must be detailed and rich, containing at least 300 to 400 words (or maximum available authentic facts). Include complete job description, requirements, responsibilities, exact company name, salary range (if available), exact location/city, and contact email/phone numbers if found on that page.
-    4. ZERO FABRICATION: Do not invent or make up any data. Only report real facts fetched directly from the search results. If the text is in a local language, translate and present it cleanly while keeping all core facts intact.
-    5. Return your findings STRICTLY as a valid JSON object with these exact keys:
+    STRICT RULES:
+    1. Execute the search query using Google Search Grounding and pick the single top, latest, real-time job listing located in {city}, {country}.
+    2. Extract the exact URL of that specific job posting page. NEVER return a homepage or root domain.
+    3. ZERO SELF-WRITING / ZERO FABRICATION: Do NOT write your own fictional filler text. Extract and compile the exact real facts from the search result page—minimum 400 words equivalent of authentic job details (full role description, requirements, responsibilities, company name, salary, exact location, phone/email contact, and direct application steps).
+    4. If the listing is in the local language of {country}, extract it cleanly in that language or translate accurately without losing any original facts.
+    5. Return strictly a valid JSON object with keys:
        - "found": true or false
-       - "title": Clean, professional job title including company and city
-       - "link": Direct application URL found during search
-       - "snippet": Rich, comprehensive text of at least 400 words equivalent detailing the job description, requirements, salary, location, contact, and direct apply instructions.
+       - "title": Exact professional job title with company and city
+       - "link": Direct URL of the actual job page
+       - "snippet": Detailed factual text (400+ words) containing all extracted job information, salary, contact details, and apply link.
     """
 
-    models_to_try = ["gemini-2.5-flash", "gemini-2.5-pro"]
+    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
     
     for model_name in models_to_try:
         try:
+            print(f"[MODEL] Trying {model_name}...")
             response = gemini_client.models.generate_content(
                 model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                     response_mime_type="application/json",
-                    temperature=0.1,
+                    temperature=0.0,
                 ),
             )
             if response and response.text:
-                data = json.loads(response.text.strip())
-                if data.get("found") and data.get("link") and data.get("title") and data.get("snippet"):
+                raw_text = response.text.strip()
+                if raw_text.startswith("```"):
+                    raw_text = raw_text.split("```")[1]
+                    if raw_text.startswith("json"):
+                        raw_text = raw_text[4:].strip()
+                
+                data = json.loads(raw_text)
+                
+                # Verify grounded source URL if available in metadata
+                grounded_url = None
+                try:
+                    chunks = response.candidates[0].grounding_metadata.grounding_chunks
+                    if chunks:
+                        for ch in chunks:
+                            if ch.web and ch.web.uri and len(ch.web.uri) > 25:
+                                grounded_url = ch.web.uri
+                                break
+                except Exception:
+                    pass
+
+                final_link = data.get("link") or grounded_url
+                if data.get("found") and final_link and data.get("title") and data.get("snippet"):
+                    data["link"] = final_link
                     return data
         except Exception as e:
-            print(f"[WARNING] Gemini model {model_name} search failed: {str(e)}")
+            print(f"[WARNING] Model {model_name} failed or hit quota: {str(e)}. Switching to next model...")
             continue
             
     return None
 
-def run_gemini_grounded_crawler():
+def run_search():
     if not supabase or not gemini_client:
-        print("[CRITICAL ERROR] Supabase or Gemini client not initialized. Check environment variables.")
+        print("[CRITICAL ERROR] Supabase or Gemini client not initialized.")
         return
 
     today = datetime.now().strftime("%A")
@@ -152,7 +174,7 @@ def run_gemini_grounded_crawler():
         return
 
     print(f"\n==================================================")
-    print(f"=== GEMINI GROUNDED HUNTER INITIATED | Day: {today} | Year: {current_year} ===")
+    print(f"=== ZUNEX GEMINI SEARCH STARTED | Day: {today} | Year: {current_year} ===")
     print(f"=== Scheduled Countries: {countries} ===")
     print(f"==================================================")
 
@@ -169,7 +191,7 @@ def run_gemini_grounded_crawler():
             selected_query_template = random.choice(QUERIES)
             
             print(f"\n[COUNTRY: {country}] Attempt {attempts} | City: {selected_city}")
-            print(f"[QUERY] Running Gemini grounded search...")
+            print(f"[QUERY] {selected_query_template.format(city=selected_city, c=country, y=current_year)}")
 
             job_data = search_and_generate_job_via_gemini(country, selected_city, selected_query_template, current_year)
             
@@ -179,7 +201,7 @@ def run_gemini_grounded_crawler():
                 snippet = job_data.get("snippet")
                 
                 if is_already_scraped(link):
-                    print(f"[DB-SKIP] Link already exists in database: {link}")
+                    print(f"[DB-SKIP] Link already exists in zunex: {link}")
                     continue
                 
                 current_timestamp = datetime.now(timezone.utc).isoformat()
@@ -198,25 +220,25 @@ def run_gemini_grounded_crawler():
                 
                 try:
                     supabase.table("zunex").insert(insert_data).execute()
-                    print(f"[SUCCESS] TOP JOB SECURED & INSERTED for {country} ({selected_city})!")
+                    print(f"[SUCCESS] JOB INSERTED INTO ZUNEX -> {country} ({selected_city})")
                     print(f"   - Title: {title}")
                     print(f"   - Link: {link}")
                     country_secured = True
                 except Exception as db_err:
-                    print(f"[DB-ERROR] Failed to insert job into Supabase: {str(db_err)}")
+                    print(f"[DB-ERROR] Insert failed: {str(db_err)}")
             else:
-                print(f"[INFO] No valid job found for {country} in this attempt. Retrying...")
+                print(f"[INFO] No valid job returned for {country} on attempt {attempts}.")
             
             if not country_secured:
-                print(f"[INFO] Waiting 5 seconds before next attempt...")
+                print(f"[SLEEP] Waiting 5 seconds before retry...")
                 time.sleep(5)
 
-        print(f"\n[PAUSE] Country transition break: Sleeping for 10 seconds before moving to next country...")
+        print(f"\n[BREAK] Sleeping 10 seconds before moving to next country...")
         time.sleep(10)
 
     print(f"\n==================================================")
-    print(f"=== GEMINI GROUNDED HUNTER RUN COMPLETED SUCCESSFULLY ===")
+    print(f"=== ZUNEX GEMINI SEARCH COMPLETED SUCCESSFULLY ===")
     print(f"==================================================")
 
 if __name__ == "__main__":
-    run_gemini_grounded_crawler()
+    run_search()
