@@ -42,10 +42,8 @@ def is_already_scraped(url):
         return False
 
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
-    print(f"\n==================================================")
-    print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
-    print(f"==================================================")
-
+    print(f"\n[TRACE-COUNTRY] Processing Country: [{target_country}] | Category: [{category}]")
+    
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
     country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"], "Visa": ["visa apply"], "Travel": ["travel tour"]})
@@ -66,8 +64,6 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     shuffled_keywords = list(keywords)
     random.shuffle(shuffled_keywords)
 
-    print(f"[TRACE-INFO] Config -> Domains: {len(shuffled_domains)} | Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)}")
-
     for target_city in shuffled_cities:
         for target_domain in shuffled_domains:
             for keyword in shuffled_keywords:
@@ -80,12 +76,9 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                 for s_url in search_urls:
                     try:
                         print(f"[TRACE-NAV] Navigating to: {s_url}")
-                        page.goto(s_url, timeout=20000)
+                        page.goto(s_url, timeout=25000)
                         time.sleep(3)
                         
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(1.5)
-
                         raw_links = page.eval_on_selector_all(
                             "a[href]",
                             """elements => elements.map(el => ({
@@ -113,7 +106,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             if len(title_text) > 12:
                                 candidate_links.append((full_link, title_text))
 
-                        print(f"[TRACE-PARSE] Found {len(candidate_links)} candidate links.")
+                        print(f"[TRACE-PARSE] Found {len(candidate_links)} candidate links on {target_domain}")
 
                         for j_link, j_title in candidate_links[:20]:
                             if is_already_scraped(j_link):
@@ -158,8 +151,8 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 }
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"[TRACE-SUCCESS] Saved post: {final_title}")
-                                    time.sleep(3)
+                                    print(f"[TRACE-SUCCESS] Saved post to DB: {final_title}")
+                                    time.sleep(5)
                                     return True
                                 except Exception as db_err:
                                     print(f"[TRACE-DB-ERROR] {db_err}")
@@ -214,7 +207,7 @@ def run_independent_crawler():
         )
         
         page = context.new_page()
-        page.set_default_timeout(20000)
+        page.set_default_timeout(30000)
 
         try:
             print(f"\n--- PHASE 1: COLLECTING JOBS ---")
@@ -249,7 +242,7 @@ def run_independent_crawler():
             print(f"[TRACE-CRITICAL-ERROR] {e}")
         finally:
             browser.close()
-            print("[TRACE-SHUTDOWN] Playwright browser closed.")
+            print("[TRACE-SHUTDOWN] Playwright browser closed cleanly.")
 
 if __name__ == "__main__":
     run_independent_crawler()
