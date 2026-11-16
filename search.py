@@ -115,7 +115,7 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
        - "snippet": Detailed factual text (400+ words) containing all extracted job information, salary, contact details, and apply link.
     """
 
-    models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash"]
     
     for model_name in models_to_try:
         try:
@@ -154,7 +154,12 @@ def search_and_generate_job_via_gemini(country, city, query_template, year):
                     data["link"] = final_link
                     return data
         except Exception as e:
-            print(f"[WARNING] Model {model_name} failed or hit quota: {str(e)}. Switching to next model...")
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                print(f"[QUOTA-LIMIT] Model {model_name} hit rate limit (429). Waiting 20 seconds before trying next model...")
+                time.sleep(20)
+            else:
+                print(f"[WARNING] Model {model_name} failed: {err_str}")
             continue
             
     return None
@@ -184,15 +189,21 @@ def run_search():
         country_secured = False
         attempts = 0
         
-        while not country_secured and attempts < 3:
+        # Shuffle queries for this country
+        shuffled_queries = list(QUERIES)
+        random.shuffle(shuffled_queries)
+        
+        for query_template in shuffled_queries:
+            if country_secured or attempts >= 2:
+                break
+                
             attempts += 1
             selected_city = random.choice(cities)
-            selected_query_template = random.choice(QUERIES)
             
             print(f"\n[COUNTRY: {country}] Attempt {attempts} | City: {selected_city}")
-            print(f"[QUERY] {selected_query_template.format(city=selected_city, c=country, y=current_year)}")
+            print(f"[QUERY] {query_template.format(city=selected_city, c=country, y=current_year)}")
 
-            job_data = search_and_generate_job_via_gemini(country, selected_city, selected_query_template, current_year)
+            job_data = search_and_generate_job_via_gemini(country, selected_city, query_template, current_year)
             
             if job_data:
                 link = job_data.get("link")
@@ -211,7 +222,7 @@ def run_search():
                     "link": link,
                     "country": f"{country} ({selected_city})",
                     "category": "Jobs",
-                    "query_used": selected_query_template.format(city=selected_city, c=country, y=current_year),
+                    "query_used": query_template.format(city=selected_city, c=country, y=current_year),
                     "status": "pending",
                     "audit_status": None,
                     "created_at": current_timestamp
@@ -226,14 +237,15 @@ def run_search():
                 except Exception as db_err:
                     print(f"[DB-ERROR] Insert failed: {str(db_err)}")
             else:
-                print(f"[INFO] No valid job returned for {country} on attempt {attempts}.")
+                print(f"[INFO] No valid job returned for {country} on this attempt.")
             
             if not country_secured:
-                print(f"[SLEEP] Waiting 5 seconds before retry...")
-                time.sleep(5)
+                print(f"[SLEEP] Waiting 20 seconds before trying next shuffled query...")
+                time.sleep(20)
 
-        print(f"\n[BREAK] Sleeping 10 seconds before moving to next country...")
-        time.sleep(10)
+        # Strict 1-minute (60 seconds) break after finishing each country
+        print(f"\n[BREAK] Country [{country}] completed or exhausted. Taking a strict 1-minute (60 seconds) break before the next country...")
+        time.sleep(60)
 
     print(f"\n==================================================")
     print(f"=== ZUNEX GEMINI SEARCH COMPLETED SUCCESSFULLY ===")
