@@ -58,16 +58,16 @@ def is_root_or_homepage(url, domain):
 
 def deep_scroll_page(page):
     try:
-        print(f"[TRACE-SCROLL] Initiating Playwright smooth deep scroll...")
+        print(f"[TRACE-SCROLL] Initiating Playwright smooth deep scroll for dynamic content loading...")
         for _ in range(3):
             page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(1.5)
+            time.sleep(1.8)
     except Exception as e:
         print(f"[TRACE-SCROLL-ERROR] {e}")
 
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
     print(f"\n==================================================")
-    print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
+    print(f"[TRACE-COUNTRY] Starting flexible process for Country: [{target_country}] | Category: [{category}]")
     print(f"==================================================")
     
     cities = COUNTRY_CITIES.get(target_country, [target_country])
@@ -86,7 +86,12 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     if not keywords:
         keywords = ["apply now", "visa support", "travel package"]
 
-    print(f"[TRACE-INFO] Total Domains: {len(domains)} | Keywords: {len(keywords)} | Cities: {len(cities)}")
+    # لچکدار اور رینڈم طریقے سے شفل کرنا تاکہ ہر بار نئے کمبینیشنز چیک ہوں
+    random.shuffle(domains)
+    random.shuffle(keywords)
+    random.shuffle(cities)
+
+    print(f"[TRACE-INFO] Flexible Config -> Domains: {len(domains)} | Keywords: {len(keywords)} | Cities: {len(cities)}")
 
     for target_domain in domains:
         print(f"\n  [TRACE-DOMAIN] Evaluating Domain -> [https://www.{target_domain}]")
@@ -97,19 +102,19 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
             time.sleep(2)
             current_loaded_url = page.url
             if not current_loaded_url or "error" in current_loaded_url.lower():
-                print(f"  [TRACE-REJECT] Domain [{target_domain}] failed to connect or returned error. Skipping.")
+                print(f"  [TRACE-REJECT] Domain [{target_domain}] failed to connect. Skipping.")
                 continue
         except Exception as conn_err:
             print(f"  [TRACE-ERROR] Connection failed for [{target_domain}]: {conn_err}. Moving to next.")
             continue
 
-        domain_has_activity = False
-
         for keyword in keywords:
             encoded_kw = keyword.replace(" ", "%20")
+            
             for target_city in cities:
                 encoded_city = target_city.replace(" ", "%20")
                 
+                # لچکدار اور تفصیلی سرچ پاتھز جو مختلف ویب سائٹس کے ڈھانچے کو کور کرتے ہیں
                 deep_paths = [
                     f"/jobs/search/?q={encoded_kw}&location={encoded_city}",
                     f"/search/?q={encoded_kw}&loc={encoded_city}",
@@ -126,7 +131,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                 for path in deep_paths:
                     s_url = f"https://www.{target_domain}{path}"
                     try:
-                        print(f"    [TRACE-NAV] Trying Deep Path -> Domain: {target_domain} | Keyword: '{keyword}' | City: '{target_city}' | Path: {path}")
+                        print(f"    [TRACE-NAV] Testing Path -> Domain: {target_domain} | Keyword: '{keyword}' | City: '{target_city}'")
                         page.goto(s_url, wait_until="domcontentloaded", timeout=20000)
                         time.sleep(2)
                         
@@ -151,38 +156,39 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             href = item['href']
                             txt = item['text']
                             
+                            # فلٹرنگ: اشتہارات، لاگ ان، پالیسی یا فضول لنکس کو فوراً باہر کرنا
                             if any(bad in href.lower() or bad in txt.lower() for bad in blocked_url_terms):
                                 continue
                                 
                             if is_root_or_homepage(href, target_domain):
                                 continue
                             
-                            is_valid_deep_link = any(ind in href.lower() for ind in deep_identifiers) or len(txt) > 8
+                            is_valid_deep_link = any(ind in href.lower() for ind in deep_identifiers) or len(txt) > 10
                             if is_valid_deep_link:
                                 title_candidate = txt if len(txt) > 5 else f"{category} Opportunity for {keyword} in {target_city}"
                                 candidate_links.append((href, title_candidate))
 
                         unique_candidates = list(dict(candidate_links).items())
-                        print(f"      [TRACE-PARSE] Discovered {len(unique_candidates)} unique candidate links from deep path.")
+                        print(f"      [TRACE-PARSE] Found {len(unique_candidates)} filtered action-oriented links.")
 
                         if not unique_candidates:
                             continue
 
-                        domain_has_activity = True
-
-                        for j_link, j_title in unique_candidates[:10]:
+                        for j_link, j_title in unique_candidates[:8]:
                             if is_root_or_homepage(j_link, target_domain) or is_already_scraped(j_link):
                                 continue
                             
-                            print(f"        [TRACE-EXTRACT] Deep extracting details: {j_link}")
+                            print(f"        [TRACE-EXTRACT] Deep verifying and extracting: {j_link}")
                             enriched_data = extract_strict_job_details(
-                                page, j_link, target_country, target_city, category
+                                page, j_link, target_country, target_city, category, keyword
                             )
                             
+                            # اگر کلینر نے ڈیٹا کو پاس کر دیا (یعنی یہ فالتو ایڈ یا پالیسی پیج نہیں ہے)
                             if enriched_data and enriched_data.get('finalUrl'):
                                 final_url = enriched_data['finalUrl']
+                                
                                 if is_root_or_homepage(final_url, target_domain) or is_already_scraped(final_url):
-                                    print(f"        [TRACE-REJECT] Final URL is homepage or already scraped: {final_url}")
+                                    print(f"        [TRACE-REJECT] Final URL is homepage or already scraped.")
                                     continue
                                     
                                 final_title = format_strict_title(
@@ -215,18 +221,17 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"  [TRACE-SUCCESS] VALID POST SECURED & INSERTED! Country: {target_country} ({target_city}) | Domain: {target_domain}")
+                                    print(f"  [TRACE-SUCCESS] ACTIONABLE POST SECURED & SAVED! Country: {target_country} ({target_city})")
                                     return True
                                 except Exception as db_err:
                                     print(f"  [TRACE-DB-ERROR] Insertion failed: {db_err}")
                                     
                     except Exception as nav_err:
-                        # Continue silently or print debug if needed
                         continue
         
-        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] fully exhausted. Shifting to next domain.")
+        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] fully checked. Shifting to next.")
 
-    print(f"[TRACE-COUNTRY-EXHAUST] All domains exhausted for country [{target_country}] in category [{category}].")
+    print(f"[TRACE-COUNTRY-EXHAUST] All domains exhausted for country [{target_country}] in [{category}].")
     return False
 
 def run_independent_crawler():
@@ -239,8 +244,8 @@ def run_independent_crawler():
     day_countries = SCHEDULE.get(today, [])
     
     print(f"\n==================================================")
-    print(f"=== PLAYWRIGHT CRAWLER INITIATED | Day: {today} | Year: {current_year} ===")
-    print(f"=== Scheduled Countries for Today: {day_countries} ===")
+    print(f"=== FLEXIBLE PLAYWRIGHT CRAWLER | Day: {today} | Year: {current_year} ===")
+    print(f"=== Scheduled Countries: {day_countries} ===")
     print(f"==================================================")
 
     if not day_countries:
@@ -250,7 +255,8 @@ def run_independent_crawler():
     blocked_url_terms = [
         "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", 
         "order", "sort", "filter", "search?", "help", "aviso", "ads", "forgot", "download",
-        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources", "/employers", "/about", "/contact"
+        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources", "/employers", "/about", "/contact",
+        "climate", "strategy", "policy", "news", "press", "events"
     ]
 
     with sync_playwright() as p:
@@ -276,14 +282,13 @@ def run_independent_crawler():
 
         try:
             print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 1: STARTING JOB POSTS COLLECTION ------")
+            print(f"--- PHASE 1: COLLECTING ACTIONABLE JOB POSTS ----")
             print(f"--------------------------------------------------")
             for country in day_countries:
-                print(f"\n[PHASE-1-COUNTRY] Processing Country: {country}")
                 search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms)
 
             print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 2: STARTING VISA POSTS COLLECTION -----")
+            print(f"--- PHASE 2: COLLECTING ACTIONABLE VISA POSTS ---")
             print(f"--------------------------------------------------")
             visa_collected = 0
             visa_attempts = 0
@@ -294,27 +299,23 @@ def run_independent_crawler():
                     if visa_collected >= 2:
                         break
                     visa_attempts += 1
-                    print(f"\n[PHASE-2-VISA-ATTEMPT {visa_attempts}] Shuffled country picked: [{country}]")
                     if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
                         visa_collected += 1
-                        print(f"[PHASE-2-VISA-PROGRESS] Total Visa Posts Collected: {visa_collected}/2")
 
             print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 3: STARTING TRAVEL POSTS COLLECTION ---")
+            print(f"--- PHASE 3: COLLECTING ACTIONABLE TRAVEL POSTS -")
             print(f"--------------------------------------------------")
             travel_collected = 0
             travel_attempts = 0
             while travel_collected < 2 and travel_attempts < 15:
                 travel_countries = list(day_countries)
                 random.shuffle(travel_countries)
-                for country in travel_countries:
+                for country in visa_countries:
                     if travel_collected >= 2:
                         break
                     travel_attempts += 1
-                    print(f"\n[PHASE-3-TRAVEL-ATTEMPT {travel_attempts}] Shuffled country picked: [{country}]")
                     if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
                         travel_collected += 1
-                        print(f"[PHASE-3-TRAVEL-PROGRESS] Total Travel Posts Collected: {travel_collected}/2")
 
             print(f"\n==================================================")
             print("=== CRAWLER EXECUTION COMPLETED SUCCESSFULLY ===")
