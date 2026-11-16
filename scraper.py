@@ -86,7 +86,6 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     if not keywords:
         keywords = ["apply now", "visa support", "travel package"]
 
-    # لچکدار اور رینڈم طریقے سے شفل کرنا تاکہ ہر بار نئے کمبینیشنز چیک ہوں
     random.shuffle(domains)
     random.shuffle(keywords)
     random.shuffle(cities)
@@ -114,7 +113,6 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
             for target_city in cities:
                 encoded_city = target_city.replace(" ", "%20")
                 
-                # لچکدار اور تفصیلی سرچ پاتھز جو مختلف ویب سائٹس کے ڈھانچے کو کور کرتے ہیں
                 deep_paths = [
                     f"/jobs/search/?q={encoded_kw}&location={encoded_city}",
                     f"/search/?q={encoded_kw}&loc={encoded_city}",
@@ -147,8 +145,8 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                         
                         candidate_links = []
                         deep_identifiers = [
-                            "/job", "/vacancy", "/vagas", "/loker", "/emploi", "/career", 
-                            "/hiring", "/position", "/listing", "/item", "/post", "/details",
+                            "/job", "/jobs","/vacancy", "/vagas", "/loker", "/emploi", "/career", "/job id","/post_id ","/page_id ",
+                            "/hiring", "/position", "/listing", "/item", "/post_id", "/details",
                             "/visa", "/travel", "/tour", "/application", "/apply"
                         ]
 
@@ -156,7 +154,6 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             href = item['href']
                             txt = item['text']
                             
-                            # فلٹرنگ: اشتہارات، لاگ ان، پالیسی یا فضول لنکس کو فوراً باہر کرنا
                             if any(bad in href.lower() or bad in txt.lower() for bad in blocked_url_terms):
                                 continue
                                 
@@ -183,7 +180,6 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 page, j_link, target_country, target_city, category, keyword
                             )
                             
-                            # اگر کلینر نے ڈیٹا کو پاس کر دیا (یعنی یہ فالتو ایڈ یا پالیسی پیج نہیں ہے)
                             if enriched_data and enriched_data.get('finalUrl'):
                                 final_url = enriched_data['finalUrl']
                                 
@@ -244,7 +240,7 @@ def run_independent_crawler():
     day_countries = SCHEDULE.get(today, [])
     
     print(f"\n==================================================")
-    print(f"=== FLEXIBLE PLAYWRIGHT CRAWLER | Day: {today} | Year: {current_year} ===")
+    print(f"=== PLAYWRIGHT CRAWLER | Day: {today} | Year: {current_year} ===")
     print(f"=== Scheduled Countries: {day_countries} ===")
     print(f"==================================================")
 
@@ -285,6 +281,7 @@ def run_independent_crawler():
             print(f"--- PHASE 1: COLLECTING ACTIONABLE JOB POSTS ----")
             print(f"--------------------------------------------------")
             for country in day_countries:
+                print(f"\n[PHASE-1-COUNTRY] Processing Country: {country}")
                 search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms)
 
             print(f"\n--------------------------------------------------")
@@ -299,8 +296,12 @@ def run_independent_crawler():
                     if visa_collected >= 2:
                         break
                     visa_attempts += 1
+                    print(f"\n[PHASE-2-VISA-ATTEMPT {visa_attempts}] Shuffled country picked: [{country}]")
                     if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
                         visa_collected += 1
+                        print(f"[PHASE-2-VISA-PROGRESS] Total Visa Posts Collected: {visa_collected}/2")
+                    if visa_collected >= 2:
+                        break
 
             print(f"\n--------------------------------------------------")
             print(f"--- PHASE 3: COLLECTING ACTIONABLE TRAVEL POSTS -")
@@ -310,15 +311,19 @@ def run_independent_crawler():
             while travel_collected < 2 and travel_attempts < 15:
                 travel_countries = list(day_countries)
                 random.shuffle(travel_countries)
-                for country in visa_countries:
+                for country in travel_countries:
                     if travel_collected >= 2:
                         break
                     travel_attempts += 1
+                    print(f"\n[PHASE-3-TRAVEL-ATTEMPT {travel_attempts}] Shuffled country picked: [{country}]")
                     if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
                         travel_collected += 1
+                        print(f"[PHASE-3-TRAVEL-PROGRESS] Total Travel Posts Collected: {travel_collected}/2")
+                    if travel_collected >= 2:
+                        break
 
             print(f"\n==================================================")
-            print("=== CRAWLER EXECUTION COMPLETED SUCCESSFULLY ===")
+            print("=== ALL TARGETS ACHIEVED. CRAWLER STOPPED & COMPLETED ===")
             print(f"==================================================")
 
         except Exception as e:
