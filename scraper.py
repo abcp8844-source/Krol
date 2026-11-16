@@ -42,7 +42,9 @@ def is_already_scraped(url):
         return False
 
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
-    print(f"\n[TRACE-COUNTRY] Processing Country: [{target_country}] | Category: [{category}]")
+    print(f"\n==================================================")
+    print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
+    print(f"==================================================")
     
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
@@ -64,8 +66,25 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     shuffled_keywords = list(keywords)
     random.shuffle(shuffled_keywords)
 
-    for target_city in shuffled_cities:
-        for target_domain in shuffled_domains:
+    print(f"[TRACE-INFO] Config -> Domains: {len(shuffled_domains)} | Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)}")
+
+    for target_domain in shuffled_domains:
+        print(f"\n  [TRACE-DOMAIN] Evaluating Domain -> [https://www.{target_domain}]")
+        base_domain_url = f"https://www.{target_domain}"
+        
+        try:
+            page.goto(base_domain_url, timeout=15000, wait_until="domcontentloaded")
+            time.sleep(1.5)
+            
+            page_text = page.content().lower()
+            if any(wall in page_text for wall in ["please sign in", "log in to continue", "sign in to view", "login required"]):
+                print(f"  [TRACE-WALL] Login/Sign-in wall detected on domain [{target_domain}]. Shifting to next domain.")
+                continue
+        except Exception as conn_err:
+            print(f"  [TRACE-DOMAIN-ERROR] Connection failed or timed out for [{target_domain}]: {conn_err}. Shifting to next domain.")
+            continue
+
+        for target_city in shuffled_cities:
             for keyword in shuffled_keywords:
                 search_urls = [
                     f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
@@ -75,9 +94,17 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                 ]
                 for s_url in search_urls:
                     try:
-                        print(f"[TRACE-NAV] Navigating to: {s_url}")
-                        page.goto(s_url, timeout=35000)
-                        time.sleep(3)
+                        print(f"    [TRACE-NAV] Navigating to: {s_url}")
+                        page.goto(s_url, timeout=15000)
+                        time.sleep(2)
+                        
+                        current_content = page.content().lower()
+                        if any(wall in current_content for wall in ["sign in to view", "log in to apply", "please login"]):
+                            print(f"    [TRACE-WALL] Sign-in wall encountered on search URL. Moving on.")
+                            break
+
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(1)
                         
                         raw_links = page.eval_on_selector_all(
                             "a[href]",
@@ -106,19 +133,19 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             if len(title_text) > 12:
                                 candidate_links.append((full_link, title_text))
 
-                        print(f"[TRACE-PARSE] Found {len(candidate_links)} candidate links on {target_domain}")
+                        print(f"      [TRACE-PARSE] Found {len(candidate_links)} candidate links on {target_domain}")
 
                         for j_link, j_title in candidate_links[:20]:
                             if is_already_scraped(j_link):
                                 continue
                             
-                            print(f"[TRACE-EXTRACT] Extracting details for: {j_link}")
+                            print(f"        [TRACE-EXTRACT] Extracting details for: {j_link}")
                             enriched_data = extract_strict_job_details(
                                 page, j_link, target_country, target_city, category
                             )
                             if enriched_data and enriched_data.get('finalUrl'):
                                 if is_already_scraped(enriched_data['finalUrl']):
-                                    print(f"[TRACE-REJECT] Final URL already scraped.")
+                                    print(f"        [TRACE-REJECT] Final URL already scraped.")
                                     continue
                                 final_title = format_strict_title(
                                     j_title, keyword, target_city, target_country, current_year
@@ -151,15 +178,19 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 }
                                 try:
                                     supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"[TRACE-SUCCESS] Saved post to DB: {final_title}")
-                                    time.sleep(5)
+                                    print(f"  [TRACE-SUCCESS] Saved post to DB: {final_title}")
+                                    time.sleep(3)
                                     return True
                                 except Exception as db_err:
-                                    print(f"[TRACE-DB-ERROR] {db_err}")
+                                    print(f"  [TRACE-DB-ERROR] {db_err}")
                                     pass
                     except Exception as nav_err:
-                        print(f"[TRACE-NAV-ERROR] {nav_err}")
+                        print(f"    [TRACE-NAV-ERROR] {nav_err}")
                         continue
+                        
+        print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] checked. Shifting to next domain.")
+        
+    print(f"[TRACE-COUNTRY-EXHAUST] All domains exhausted for country [{target_country}] in [{category}].")
     return False
 
 def run_independent_crawler():
@@ -177,6 +208,7 @@ def run_independent_crawler():
     print(f"==================================================")
 
     if not day_countries:
+        print("[TRACE-INFO] No countries scheduled for today.")
         return
 
     blocked_url_terms = [
@@ -207,14 +239,18 @@ def run_independent_crawler():
         )
         
         page = context.new_page()
-        page.set_default_timeout(30000)
+        page.set_default_timeout(20000)
 
         try:
-            print(f"\n--- PHASE 1: COLLECTING JOBS ---")
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 1: COLLECTING JOBS ---------------------")
+            print(f"--------------------------------------------------")
             for country in day_countries:
                 search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms)
 
-            print(f"\n--- PHASE 2: COLLECTING VISA POSTS ---")
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 2: COLLECTING VISA POSTS ---------------")
+            print(f"--------------------------------------------------")
             visa_collected = 0
             while visa_collected < 2:
                 shuffled_visa_countries = list(day_countries)
@@ -225,7 +261,9 @@ def run_independent_crawler():
                     if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
                         visa_collected += 1
 
-            print(f"\n--- PHASE 3: COLLECTING TRAVEL POSTS ---")
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 3: COLLECTING TRAVEL POSTS -------------")
+            print(f"--------------------------------------------------")
             travel_collected = 0
             while travel_collected < 2:
                 shuffled_travel_countries = list(day_countries)
@@ -236,7 +274,9 @@ def run_independent_crawler():
                     if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
                         travel_collected += 1
 
-            print(f"\n=== CRAWLER FINISHED SUCCESSFULLY ===")
+            print(f"\n==================================================")
+            print("=== ALL TARGETS ACHIEVED. CRAWLER FINISHED SUCCESSFULLY ===")
+            print(f"==================================================")
 
         except Exception as e:
             print(f"[TRACE-CRITICAL-ERROR] {e}")
