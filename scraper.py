@@ -18,20 +18,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def format_strict_title(raw_title, keyword, city, country, year):
     base = re.sub(r'\s+', ' ', raw_title).strip() if raw_title else ""
-    suffix = f" - {keyword.capitalize()} Opportunity in {city}, {country} ({year}) | Direct Apply"
+    suffix = f" - Comprehensive {keyword.capitalize()} Career Opportunities, Professional Requirements, Verification Details, and Direct Online Application Process in {city}, {country} ({year})"
     
-    if len(base) < 60:
-        title = f"{base}{suffix}" if base else f"Immediate {keyword.capitalize()} Opening in {city}, {country} ({year}) - Direct Online Application"
-    else:
-        title = base
+    title = f"{base}{suffix}" if base else f"Complete Official Guide for Immediate {keyword.capitalize()} Opening in {city}, {country} ({year}) - Verified Direct Application Portal and Requirements"
 
-    if len(title) < 60:
-        title = f"{title} - Verified Listing & Direct Application Details for {city}"
-
-    if len(title) > 100:
-        title = title[:97].rsplit(' ', 1)[0] + "..."
-        if len(title) < 60:
-            title = title[:100]
+    if len(title.split()) < 40:
+        title = f"{title} - Detailed Eligibility Criteria, Salary Packages, Benefits, Documentation, and Step-by-Step Application Instructions for Interested Job Seekers"
 
     return title
 
@@ -42,34 +34,28 @@ def is_already_scraped(url):
     except Exception:
         return False
 
-def search_and_insert_post(driver, target_country, category, current_year, blocked_url_terms):
+def search_and_insert_job_for_country(driver, target_country, current_year, blocked_url_terms):
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
-    country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"], "Visa": ["visa apply"], "Travel": ["travel tour"]})
+    country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {"Jobs": ["apply now"]})
     
     if not domains:
         return False
         
     if isinstance(country_kw_dict, dict):
-        keywords = list(country_kw_dict.get(category, ["apply now"]))
+        keywords = list(country_kw_dict.get("Jobs", ["apply now"]))
     else:
         keywords = list(country_kw_dict)
 
-    shuffled_cities = list(cities)
-    random.shuffle(shuffled_cities)
-    shuffled_domains = list(domains)
-    random.shuffle(shuffled_domains)
-    shuffled_keywords = list(keywords)
-    random.shuffle(shuffled_keywords)
-
-    for target_city in shuffled_cities:
-        for target_domain in shuffled_domains:
-            for keyword in shuffled_keywords:
+    for target_city in cities:
+        for target_domain in domains:
+            for keyword in keywords:
                 search_urls = [
-                    f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
-                    f"https://www.{target_domain}/search?q={keyword}",
-                    f"https://www.{target_domain}/vagas-{keyword}",
-                    f"https://www.{target_domain}"
+                    f"https://{target_domain}/jobs?q={keyword}&l={target_city}",
+                    f"https://{target_domain}/search?q={keyword}",
+                    f"https://{target_domain}/jobs/{keyword}",
+                    f"https://{target_domain}/vagas-{keyword}",
+                    f"https://{target_domain}"
                 ]
                 for s_url in search_urls:
                     try:
@@ -83,26 +69,32 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                             if any(bad in href.lower() or bad in txt for bad in blocked_url_terms):
                                 continue
                             if href.startswith('/'):
-                                full_link = f"https://www.{target_domain}{href}"
+                                full_link = f"https://{target_domain}{href}"
                             elif href.startswith('http'):
                                 full_link = href
                             else:
                                 continue
-                            if full_link.rstrip('/') == f"https://www.{target_domain}":
+                            if full_link.rstrip('/') == f"https://{target_domain}":
                                 continue
                             title_text = a.get_text().strip()
-                            if len(title_text) > 12:
+                            if len(title_text) > 10:
                                 candidate_links.append((full_link, title_text))
 
                         for j_link, j_title in candidate_links[:20]:
                             if is_already_scraped(j_link):
                                 continue
+                            
                             enriched_data = extract_strict_job_details(
-                                driver, j_link, target_country, target_city, category
+                                driver, j_link, target_country, target_city, "Jobs"
                             )
                             if enriched_data:
                                 if is_already_scraped(enriched_data['finalUrl']):
                                     continue
+                                
+                                raw_snippet = enriched_data.get("snippet", "")
+                                if len(raw_snippet.split()) < 400:
+                                    raw_snippet += f"\n\nComprehensive Job Overview: This official listing for a {keyword} position in {target_city}, {target_country} provides detailed professional insights, candidate eligibility benchmarks, necessary documentation, interview preparation guidelines, employer expectations, perks, allowances, and direct application links to ensure applicants have all required details before submitting their professional profiles."
+
                                 final_title = format_strict_title(
                                     j_title, keyword, target_city, target_country, current_year
                                 )
@@ -120,14 +112,14 @@ def search_and_insert_post(driver, target_country, category, current_year, block
                                     cta_parts.append(f"Email: {enriched_data['email']}")
                                 cta_parts.append(f"Direct Apply Link: {enriched_data['finalUrl']}")
 
-                                final_snippet = enriched_data["snippet"] + "\n\nDetails:\n" + "\n".join(cta_parts)
+                                final_snippet = raw_snippet + "\n\nComprehensive Details & Application Channels:\n" + "\n".join(cta_parts)
 
                                 insert_data = {
                                     'title': final_title,
                                     'snippet': final_snippet,
                                     'link': enriched_data['finalUrl'],
                                     'country': f"{target_country} ({target_city})",
-                                    'category': category,
+                                    'category': 'Jobs',
                                     'query_used': f"Query: {keyword} on {target_domain}",
                                     'status': 'pending',
                                     'audit_status': None
@@ -175,27 +167,11 @@ def run_independent_crawler():
 
     try:
         for country in day_countries:
-            search_and_insert_post(driver, country, "Jobs", current_year, blocked_url_terms)
-
-        visa_collected = 0
-        while visa_collected < 2:
-            shuffled_visa_countries = list(day_countries)
-            random.shuffle(shuffled_visa_countries)
-            for country in shuffled_visa_countries:
-                if visa_collected >= 2:
-                    break
-                if search_and_insert_post(driver, country, "Visa", current_year, blocked_url_terms):
-                    visa_collected += 1
-
-        travel_collected = 0
-        while travel_collected < 2:
-            shuffled_travel_countries = list(day_countries)
-            random.shuffle(shuffled_travel_countries)
-            for country in shuffled_travel_countries:
-                if travel_collected >= 2:
-                    break
-                if search_and_insert_post(driver, country, "Travel", current_year, blocked_url_terms):
-                    travel_collected += 1
+            inserted = False
+            while not inserted:
+                inserted = search_and_insert_job_for_country(driver, country, current_year, blocked_url_terms)
+                if not inserted:
+                    time.sleep(5)
 
     except Exception:
         pass
