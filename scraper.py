@@ -2,6 +2,7 @@ import time
 import random
 import re
 from datetime import datetime
+from urllib.parse import quote
 from playwright.sync_api import sync_playwright
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY, SCHEDULE, COUNTRY_CITIES, USER_AGENTS
@@ -90,10 +91,13 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
 
         for target_city in shuffled_cities:
             for keyword in shuffled_keywords:
+                encoded_kw = quote(keyword)
+                encoded_city = quote(target_city)
+                
                 search_urls = [
-                    f"https://www.{target_domain}/jobs?q={keyword}&l={target_city}",
-                    f"https://www.{target_domain}/search?q={keyword}",
-                    f"https://www.{target_domain}/vagas-{keyword}",
+                    f"https://www.{target_domain}/jobs?q={encoded_kw}&l={encoded_city}",
+                    f"https://www.{target_domain}/search?q={encoded_kw}",
+                    f"https://www.{target_domain}/vagas-{encoded_kw}",
                     f"https://www.{target_domain}"
                 ]
                 for s_url in search_urls:
@@ -243,7 +247,7 @@ def run_independent_crawler():
         )
         
         page = context.new_page()
-        page.set_default_timeout(350000)
+        page.set_default_timeout(20000)
 
         try:
             print(f"\n--------------------------------------------------")
