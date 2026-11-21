@@ -310,4 +310,185 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                 continue
 
                             fallback_pool = [
-                                u for u, _ in links_slice[idx
+                                u for u, _ in links_slice[idx + 1 : idx + 3] if not is_already_scraped(u)
+                            ]
+
+                            print(f"        [TRACE-EXTRACT] {j_link}")
+                            enriched_data = extract_strict_job_details(
+                                page,
+                                j_link,
+                                target_country,
+                                target_city,
+                                category=category,
+                                search_keyword=keyword,
+                                fallback_urls=fallback_pool,
+                            )
+
+                            if (
+                                isinstance(enriched_data, dict)
+                                and enriched_data.get("accepted")
+                                and enriched_data.get("finalUrl")
+                            ):
+                                final_url = enriched_data["finalUrl"]
+                                if is_already_scraped(final_url):
+                                    print(f"        [TRACE-DUP] Already in DB: {final_url}")
+                                    continue
+
+                                post_score = _score_rich_and_fresh_post(enriched_data, j_title, current_year)
+                                evaluated_posts.append((post_score, j_title, enriched_data))
+
+                                if len(evaluated_posts) >= 5 and post_score >= 950:
+                                    break
+
+                        if evaluated_posts:
+                            evaluated_posts.sort(key=lambda x: x[0], reverse=True)
+                            best_score, best_title, best_data = evaluated_posts[0]
+                            final_url = best_data["finalUrl"]
+                            final_title = format_strict_title(
+                                best_title, keyword, target_city, target_country, current_year
+                            )
+
+                            cta_parts = []
+                            if best_data.get("salary") and best_data["salary"] != "Not Specified":
+                                cta_parts.append(f"Salary/Fee: {best_data['salary']}")
+                            if best_data.get("location"):
+                                cta_parts.append(f"Location/City: {best_data['location']}")
+                            if best_data.get("phone"):
+                                cta_parts.append(f"Contact/Phone: {best_data['phone']}")
+                            if best_data.get("email"):
+                                cta_parts.append(f"Email: {best_data['email']}")
+                            cta_parts.append(f"Source Link: {final_url}")
+
+                            base_snippet = best_data.get("snippet") or ""
+                            final_snippet = f"{base_snippet}\n\nDetails:\n" + "\n".join(cta_parts)
+
+                            insert_data = {
+                                "title": final_title,
+                                "snippet": final_snippet,
+                                "link": final_url,
+                                "country": f"{target_country} ({target_city})",
+                                "category": category,
+                                "query_used": f"Query: {keyword} on {clean_dom}",
+                                "status": "pending",
+                                "audit_status": None,
+                            }
+
+                            try:
+                                supabase.table("zunex").insert(insert_data).execute()
+                                print(f"  [TRACE-DONE] Saved best post (score={best_score}) for [{target_country}]: {final_title}")
+                                page.wait_for_timeout(1200)
+                                domain_done = True
+                                return True
+                            except Exception as db_err:
+                                print(f"  [TRACE-DB-ERROR] {db_err}")
+                                continue
+
+                    except Exception as nav_err:
+                        print(f"    [TRACE-NAV-ERROR] {nav_err}")
+                        continue
+
+        print(f"  [TRACE-DOMAIN-NEXT] Moving past [{clean_dom}].")
+
+    print(f"[TRACE-COUNTRY-NEXT] Finished all checks for [{target_country}] ({category}). Moving to next country.")
+    return False
+
+
+def run_independent_crawler():
+    if not supabase:
+        print("[TRACE-CRITICAL] Supabase client is not initialized.")
+        return
+
+    today = datetime.now().strftime("%A")
+    current_year = datetime.now().year
+    day_countries = list(dict.fromkeys(SCHEDULE.get(today, [])))
+
+    print(f"\n==================================================")
+    print(f"=== PLAYWRIGHT CRAWLER | Day: {today} | Year: {current_year} ===")
+    print(f"=== Scheduled Countries ({len(day_countries)}): {day_countries} ===")
+    print(f"==================================================")
+
+    if not day_countries:
+        print("[TRACE-INFO] No countries scheduled for today.")
+        return
+
+    blocked_url_terms = [
+        "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in",
+        "order", "sort", "filter", "search?", "help", "aviso", "ads", "forgot", "download",
+        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources",
+        "/employers", "/about", "/contact",
+    ]
+
+    with sync_playwright() as p:
+        print("[TRACE-INIT] Launching Chromium...")
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-blink-features=AutomationControlled",
+                "--ignore-certificate-errors",
+                "--ignore-ssl-errors",
+            ],
+        )
+
+        context = browser.new_context(
+            user_agent=random.choice(USER_AGENTS),
+            viewport={"width": 1366, "height": 768},
+            bypass_csp=True,
+            ignore_https_errors=True,
+        )
+        context.route("**/*", _route_heavy_assets)
+
+        page = context.new_page()
+        page.set_default_timeout(20000)
+
+        try:
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 1: 1 POST PER COUNTRY (JOBS) -----------")
+            print(f"--------------------------------------------------")
+            jobs_saved = 0
+            for country in day_countries:
+                if search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms):
+                    jobs_saved += 1
+            print(f"[TRACE-PHASE1] Jobs saved today: {jobs_saved}/{len(day_countries)}")
+
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 2: VISA POSTS ------------------------")
+            print(f"--------------------------------------------------")
+            visa_saved = 0
+            for country in day_countries:
+                if visa_saved >= 2:
+                    break
+                if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
+                    visa_saved += 1
+            print(f"[TRACE-PHASE2] Visa saved today: {visa_saved}/2")
+
+            print(f"\n--------------------------------------------------")
+            print(f"--- PHASE 3: TRAVEL POSTS ----------------------")
+            print(f"--------------------------------------------------")
+            travel_saved = 0
+            for country in day_countries:
+                if travel_saved >= 2:
+                    break
+                if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
+                    travel_saved += 1
+            print(f"[TRACE-PHASE3] Travel saved today: {travel_saved}/2")
+
+            print(f"\n==================================================")
+            print("=== CRAWLER FINISHED ===")
+            print(f"==================================================")
+
+        except Exception as e:
+            print(f"[TRACE-CRITICAL-ERROR] {e}")
+        finally:
+            try:
+                context.close()
+            except Exception:
+                pass
+            browser.close()
+            print("[TRACE-SHUTDOWN] Browser closed.")
+
+
+if __name__ == "__main__":
+    run_independent_crawler()
