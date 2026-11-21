@@ -16,8 +16,14 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 MAX_CANDIDATE_LINKS = 15
-MAX_TIME_PER_DOMAIN_SEC = 35
-MAX_TIME_PER_COUNTRY_SEC = 180
+MAX_BUTTON_CLICKS_PER_PAGE = 4
+MAX_TIME_PER_DOMAIN_SEC = 150
+MAX_TIME_PER_COUNTRY_SEC = 1800
+
+DANGEROUS_CLICK_TERMS = [
+    "login", "log in", "sign in", "signin", "sign up", "signup", "register",
+    "delete", "remove", "unsubscribe", "decline", "reject", "cookie settings",
+]
 
 
 def _normalize_domain(domain: str) -> str:
@@ -99,6 +105,112 @@ def _get_keywords_for_country_category(target_country: str, category: str) -> li
     return []
 
 
+def _collect_filtered_links(page, base_domain_url: str, blocked_url_terms: list) -> list:
+    raw_links = page.eval_on_selector_all(
+        "a[href]",
+        """elements => elements.map(el => ({
+            href: el.href,
+            text: el.innerText ? el.innerText.trim() : ''
+        }))""",
+    )
+
+    candidate_links = []
+    seen_hrefs = set()
+
+    for item in raw_links or []:
+        href = (item.get("href") or "").strip()
+        title_text = re.sub(r"\s+", " ", item.get("text") or "").strip()
+        txt_lower = title_text.lower()
+        href_lower = href.lower()
+
+        if not href.startswith(("http://", "https://")):
+            continue
+        if href in seen_hrefs:
+            continue
+        if any(bad in href_lower or bad in txt_lower for bad in blocked_url_terms):
+            continue
+        if href.rstrip("/") == base_domain_url:
+            continue
+        if len(title_text) > 10:
+            seen_hrefs.add(href)
+            candidate_links.append((href, title_text))
+
+    return candidate_links
+
+
+def _click_relevant_page_buttons(page, category: str, target_city: str, target_country: str) -> bool:
+    category_terms = {
+        "Jobs": ["job", "jobs", "career", "careers", "hiring", "vacancy", "vacancies", "latest", "openings", "apply", "search", "load more", "show more", "more"],
+        "Visa": ["visa", "visas", "immigration", "permit", "work permit", "residency", "entry", "latest", "search", "load more", "show more", "more"],
+        "Travel": ["travel", "tour", "tours", "hotel", "hotels", "flight", "flights", "holiday", "package", "latest", "search", "load more", "show more", "more"],
+    }
+    terms = list(category_terms.get(category, category_terms["Jobs"]))
+    city_l = (target_city or "").lower().strip()
+    country_l = (target_country or "").lower().strip()
+
+    clicked_any = False
+    locators = page.locator("button, a[role='button'], input[type='submit'], a")
+    count = min(locators.count(), 60)
+    clicks_done = 0
+
+    for i in range(count):
+        if clicks_done >= MAX_BUTTON_CLICKS_PER_PAGE:
+            break
+        el = locators.nth(i)
+        try:
+            if not el.is_visible():
+                continue
+            label = re.sub(r"\s+", " ", (el.inner_text(timeout=800) or "")).strip()
+            label_l = label.lower()
+            if not label_l or len(label_l) > 60:
+                continue
+            if any(bad in label_l for bad in DANGEROUS_CLICK_TERMS):
+                continue
+
+            has_term = any(t in label_l for t in terms)
+            has_loc_combo = (
+                (city_l and city_l in label_l and any(k in label_l for k in ["job", "visa", "tour", "travel", "work", "hire"]))
+                or (country_l and country_l in label_l and any(k in label_l for k in ["job", "visa", "tour", "travel", "work", "hire"]))
+            )
+
+            if has_term or has_loc_combo:
+                el.scroll_into_view_if_needed(timeout=1500)
+                el.click(timeout=2500)
+                page.wait_for_timeout(1200)
+                clicks_done += 1
+                clicked_any = True
+                print(f"      [TRACE-BTN-CLICK] Clicked [{label}]")
+        except Exception:
+            continue
+
+    return clicked_any
+
+
+def _score_rich_and_fresh_post(enriched_data: dict, title_text: str, current_year: int) -> int:
+    snippet = enriched_data.get("snippet") or ""
+    words = snippet.split()
+    word_count = len(words)
+
+    score = min(word_count, 1200)
+
+    if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
+        score += 120
+    if enriched_data.get("location"):
+        score += 60
+    if enriched_data.get("phone"):
+        score += 80
+    if enriched_data.get("email"):
+        score += 80
+
+    combined_l = f"{title_text} {snippet}".lower()
+    if str(current_year) in combined_l or str(current_year - 1) in combined_l:
+        score += 150
+    if any(f in combined_l for f in ["latest", "new", "urgent", "immediate", "today", "2026", "2025"]):
+        score += 90
+
+    return score
+
+
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
     print(f"\n==================================================")
     print(f"[TRACE-COUNTRY] Country: [{target_country}] | Category: [{category}]")
@@ -127,15 +239,15 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     )
 
     for target_domain in domains:
-        if time.monotonic() - country_start > MAX_TIME_PER_COUNTRY_SEC:
-            print(f"[TRACE-COUNTRY-CAP] Time cap reached for [{target_country}]. Moving to next country.")
+        if (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
+            print(f"[TRACE-COUNTRY-CAP] 30-min cap reached for [{target_country}]. Moving to next country.")
             break
 
         clean_dom = _normalize_domain(target_domain)
         base_domain_url = f"https://{clean_dom}"
         domain_start = time.monotonic()
 
-        print(f"\n  [TRACE-DOMAIN] Trying [{base_domain_url}]")
+        print(f"\n  [TRACE-DOMAIN] Trying [{base_domain_url}] (Up to 2.5 mins)")
 
         try:
             page.goto(base_domain_url, timeout=15000, wait_until="domcontentloaded")
@@ -151,17 +263,17 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
         domain_done = False
 
         for target_city in cities:
-            if domain_done or time.monotonic() - domain_start > MAX_TIME_PER_DOMAIN_SEC:
+            if domain_done or (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
                 break
 
             for keyword in keywords:
-                if domain_done or time.monotonic() - domain_start > MAX_TIME_PER_DOMAIN_SEC:
+                if domain_done or (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
                     break
 
                 search_urls = _build_search_urls(clean_dom, keyword, target_city, category)
 
                 for s_url in search_urls:
-                    if domain_done or time.monotonic() - domain_start > MAX_TIME_PER_DOMAIN_SEC:
+                    if domain_done or (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
                         break
 
                     try:
@@ -177,211 +289,25 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                         page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
                         page.wait_for_timeout(700)
 
-                        raw_links = page.eval_on_selector_all(
-                            "a[href]",
-                            """elements => elements.map(el => ({
-                                href: el.href,
-                                text: el.innerText ? el.innerText.trim() : ''
-                            }))""",
-                        )
+                        candidate_links = _collect_filtered_links(page, base_domain_url, blocked_url_terms)
 
-                        candidate_links = []
-                        seen_hrefs = set()
-
-                        for item in raw_links or []:
-                            href = (item.get("href") or "").strip()
-                            title_text = re.sub(r"\s+", " ", item.get("text") or "").strip()
-                            txt_lower = title_text.lower()
-                            href_lower = href.lower()
-
-                            if not href.startswith(("http://", "https://")):
-                                continue
-                            if href in seen_hrefs:
-                                continue
-                            if any(bad in href_lower or bad in txt_lower for bad in blocked_url_terms):
-                                continue
-                            if href.rstrip("/") == base_domain_url:
-                                continue
-                            if len(title_text) > 10:
-                                seen_hrefs.add(href)
-                                candidate_links.append((href, title_text))
+                        if len(candidate_links) < 4:
+                            clicked = _click_relevant_page_buttons(page, category, target_city, target_country)
+                            if clicked:
+                                page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                                page.wait_for_timeout(800)
+                                candidate_links = _collect_filtered_links(page, base_domain_url, blocked_url_terms)
 
                         print(f"      [TRACE-PARSE] {len(candidate_links)} links found on {clean_dom}")
 
-                        for idx, (j_link, j_title) in enumerate(candidate_links[:MAX_CANDIDATE_LINKS]):
+                        evaluated_posts = []
+                        links_slice = candidate_links[:MAX_CANDIDATE_LINKS]
+
+                        for idx, (j_link, j_title) in enumerate(links_slice):
+                            if (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
+                                break
                             if is_already_scraped(j_link):
                                 continue
 
                             fallback_pool = [
-                                u for u, _ in candidate_links[idx + 1 : idx + 3] if not is_already_scraped(u)
-                            ]
-
-                            print(f"        [TRACE-EXTRACT] {j_link}")
-                            enriched_data = extract_strict_job_details(
-                                page,
-                                j_link,
-                                target_country,
-                                target_city,
-                                category=category,
-                                search_keyword=keyword,
-                                fallback_urls=fallback_pool,
-                            )
-
-                            if (
-                                isinstance(enriched_data, dict)
-                                and enriched_data.get("accepted")
-                                and enriched_data.get("finalUrl")
-                            ):
-                                final_url = enriched_data["finalUrl"]
-                                if is_already_scraped(final_url):
-                                    print(f"        [TRACE-DUP] Already in DB: {final_url}")
-                                    continue
-
-                                final_title = format_strict_title(
-                                    j_title, keyword, target_city, target_country, current_year
-                                )
-
-                                cta_parts = []
-                                if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
-                                    cta_parts.append(f"Salary/Fee: {enriched_data['salary']}")
-                                if enriched_data.get("location"):
-                                    cta_parts.append(f"Location/City: {enriched_data['location']}")
-                                if enriched_data.get("phone"):
-                                    cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
-                                if enriched_data.get("email"):
-                                    cta_parts.append(f"Email: {enriched_data['email']}")
-                                cta_parts.append(f"Source Link: {final_url}")
-
-                                base_snippet = enriched_data.get("snippet") or ""
-                                final_snippet = f"{base_snippet}\n\nDetails:\n" + "\n".join(cta_parts)
-
-                                insert_data = {
-                                    "title": final_title,
-                                    "snippet": final_snippet,
-                                    "link": final_url,
-                                    "country": f"{target_country} ({target_city})",
-                                    "category": category,
-                                    "query_used": f"Query: {keyword} on {clean_dom}",
-                                    "status": "pending",
-                                    "audit_status": None,
-                                }
-
-                                try:
-                                    supabase.table("zunex").insert(insert_data).execute()
-                                    print(f"  [TRACE-DONE] Saved for [{target_country}]: {final_title}")
-                                    page.wait_for_timeout(1200)
-                                    domain_done = True
-                                    return True
-                                except Exception as db_err:
-                                    print(f"  [TRACE-DB-ERROR] {db_err}")
-                                    continue
-
-                    except Exception as nav_err:
-                        print(f"    [TRACE-NAV-ERROR] {nav_err}")
-                        continue
-
-        print(f"  [TRACE-DOMAIN-NEXT] Moving past [{clean_dom}].")
-
-    print(f"[TRACE-COUNTRY-NEXT] Finished all checks for [{target_country}] ({category}). Moving to next country.")
-    return False
-
-
-def run_independent_crawler():
-    if not supabase:
-        print("[TRACE-CRITICAL] Supabase client is not initialized.")
-        return
-
-    today = datetime.now().strftime("%A")
-    current_year = datetime.now().year
-    day_countries = list(dict.fromkeys(SCHEDULE.get(today, [])))
-
-    print(f"\n==================================================")
-    print(f"=== PLAYWRIGHT CRAWLER | Day: {today} | Year: {current_year} ===")
-    print(f"=== Scheduled Countries ({len(day_countries)}): {day_countries} ===")
-    print(f"==================================================")
-
-    if not day_countries:
-        print("[TRACE-INFO] No countries scheduled for today.")
-        return
-
-    blocked_url_terms = [
-        "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in",
-        "order", "sort", "filter", "search?", "help", "aviso", "ads", "forgot", "download",
-        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources",
-        "/employers", "/about", "/contact",
-    ]
-
-    with sync_playwright() as p:
-        print("[TRACE-INIT] Launching Chromium...")
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-gpu",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-                "--ignore-certificate-errors",
-                "--ignore-ssl-errors",
-            ],
-        )
-
-        context = browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
-            viewport={"width": 1366, "height": 768},
-            bypass_csp=True,
-            ignore_https_errors=True,
-        )
-        context.route("**/*", _route_heavy_assets)
-
-        page = context.new_page()
-        page.set_default_timeout(20000)
-
-        try:
-            print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 1: 1 POST PER COUNTRY (JOBS) -----------")
-            print(f"--------------------------------------------------")
-            jobs_saved = 0
-            for country in day_countries:
-                if search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms):
-                    jobs_saved += 1
-            print(f"[TRACE-PHASE1] Jobs saved today: {jobs_saved}/{len(day_countries)}")
-
-            print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 2: VISA POSTS ------------------------")
-            print(f"--------------------------------------------------")
-            visa_saved = 0
-            for country in day_countries:
-                if visa_saved >= 2:
-                    break
-                if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
-                    visa_saved += 1
-            print(f"[TRACE-PHASE2] Visa saved today: {visa_saved}/2")
-
-            print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 3: TRAVEL POSTS ----------------------")
-            print(f"--------------------------------------------------")
-            travel_saved = 0
-            for country in day_countries:
-                if travel_saved >= 2:
-                    break
-                if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
-                    travel_saved += 1
-            print(f"[TRACE-PHASE3] Travel saved today: {travel_saved}/2")
-
-            print(f"\n==================================================")
-            print("=== CRAWLER FINISHED ===")
-            print(f"==================================================")
-
-        except Exception as e:
-            print(f"[TRACE-CRITICAL-ERROR] {e}")
-        finally:
-            try:
-                context.close()
-            except Exception:
-                pass
-            browser.close()
-            print("[TRACE-SHUTDOWN] Browser closed.")
-
-
-if __name__ == "__main__":
-    run_independent_crawler()
+                                u for u, _ in links_slice[idx
