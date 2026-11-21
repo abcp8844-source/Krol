@@ -14,17 +14,40 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zunex?status=eq.success" \
+          set -euo pipefail
+
+          NOW_UTC=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          NOW_TH=$(TZ="Asia/Bangkok" date +"%Y-%m-%d %H:%M:%S ICT")
+          echo "=================================================="
+          echo "Run started at: $NOW_UTC | Thailand: $NOW_TH"
+          echo "=================================================="
+
+          SUCCESS_RECORDS=$(curl -s -X GET "${SUPABASE_URL}/rest/v1/zunex?status=eq.success&select=id,title,country,category,query_used" \
             -H "apikey: ${SUPABASE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_KEY}"
+            -H "Authorization: Bearer ${SUPABASE_KEY}")
+
+          SUCCESS_COUNT=$(echo "$SUCCESS_RECORDS" | jq 'length')
+          echo "[SUCCESS CLEANUP] Found $SUCCESS_COUNT record(s) with status=eq.success"
+          if [ "$SUCCESS_COUNT" -gt 0 ]; then
+            echo "$SUCCESS_RECORDS" | jq -r '.[] | "  - ID: \(.id) | [\(.category // "-")] \(.country // "-") | \(.query_used // "-") | \(.title // "No Title" | .[0:70])"'
+            curl -s -o /dev/null -X DELETE "${SUPABASE_URL}/rest/v1/zunex?status=eq.success" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}"
+            echo "[SUCCESS CLEANUP] Deleted $SUCCESS_COUNT success record(s) from zunex."
+          fi
 
           RECORDS=$(curl -s -X GET "${SUPABASE_URL}/rest/v1/zunex?status=neq.success" \
             -H "apikey: ${SUPABASE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_KEY}")
 
           COUNT=$(echo "$RECORDS" | jq 'length')
+          echo ""
+          echo "[TRANSFER CHECK] Found $COUNT record(s) with status=neq.success"
 
           if [ "$COUNT" -gt 0 ]; then
+            echo "[TRANSFER ITEMS] Posts to move to raw_jobs:"
+            echo "$RECORDS" | jq -r '.[] | "  - ID: \(.id) | status=\(.status // "-") | [\(.category // "-")] \(.country // "-") | \(.query_used // "-") | \(.title // "No Title" | .[0:75])"'
+
             PAYLOAD=$(echo "$RECORDS" | jq '[.[] | .audit_status = null]')
 
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${SUPABASE_URL}/rest/v1/raw_jobs" \
@@ -34,11 +57,18 @@ jobs:
               -H "Prefer: resolution=ignore-duplicates" \
               -d "$PAYLOAD")
 
+            echo "[TRANSFER RESPONSE] raw_jobs HTTP status: $HTTP_STATUS"
+
             if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
-              curl -s -X DELETE "${SUPABASE_URL}/rest/v1/zunex?status=neq.success" \
+              curl -s -o /dev/null -X DELETE "${SUPABASE_URL}/rest/v1/zunex?status=neq.success" \
                 -H "apikey: ${SUPABASE_KEY}" \
                 -H "Authorization: Bearer ${SUPABASE_KEY}"
+              MOVED_IDS=$(echo "$RECORDS" | jq -r '[.[].id] | join(", ")')
+              echo "[TRANSFER DONE] Transferred and deleted from zunex at $(date -u +"%H:%M:%S UTC") / $(TZ="Asia/Bangkok" date +"%H:%M:%S ICT") | IDs: [$MOVED_IDS]"
             else
+              echo "[TRANSFER ERROR] Failed to insert into raw_jobs (HTTP $HTTP_STATUS). Keeping records in zunex."
               exit 1
             fi
+          else
+            echo "[TRANSFER SKIP] No non-success records to transfer."
           fi
