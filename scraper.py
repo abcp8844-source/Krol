@@ -1,7 +1,9 @@
 import random
 import re
+import signal
+import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote, urlparse
 from playwright.sync_api import sync_playwright
 from supabase import Client, create_client
@@ -15,22 +17,72 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-MAX_CANDIDATE_LINKS = 15
+MAX_CANDIDATE_LINKS = 16
 MAX_BUTTON_CLICKS_PER_PAGE = 4
-MAX_TIME_PER_DOMAIN_SEC = 150
-MAX_TIME_PER_COUNTRY_SEC = 1800
+MAX_ZERO_POST_RETRIES = 3
 
 DANGEROUS_CLICK_TERMS = [
     "login", "log in", "sign in", "signin", "sign up", "signup", "register",
     "delete", "remove", "unsubscribe", "decline", "reject", "cookie settings",
 ]
 
+INSERTED_POSTS_LOG = []
+SUMMARY_PRINTED = False
+
 
 def _normalize_domain(domain: str) -> str:
     d = (domain or "").strip().lower()
     if d.startswith("http://") or d.startswith("https://"):
         d = urlparse(d).netloc
-    return d.lstrip("/")
+    return d.strip("/")
+
+
+def _candidate_base_urls(domain: str) -> list:
+    raw = (domain or "").strip()
+    urls = []
+    if raw.startswith(("http://", "https://")):
+        urls.append(raw.rstrip("/"))
+    core = _normalize_domain(domain)
+    if core:
+        bare = core[4:] if core.startswith("www.") else core
+        for u in (f"https://{core}", f"https://{bare}", f"https://www.{bare}"):
+            if u not in urls:
+                urls.append(u)
+    return urls
+
+
+def print_final_run_summary(reason: str = "Normal Exit"):
+    global SUMMARY_PRINTED
+    if SUMMARY_PRINTED:
+        return
+    SUMMARY_PRINTED = True
+
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    now_local = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print("\n==================================================")
+    print(f"=== FINAL RUN REPORT ({reason}) | UTC: {now_utc} | Local: {now_local} ===")
+    print(f"=== Total Posts Inserted This Run: {len(INSERTED_POSTS_LOG)} ===")
+    if INSERTED_POSTS_LOG:
+        ids_only = [str(item.get("id")) for item in INSERTED_POSTS_LOG if item.get("id") is not None]
+        print(f"=== Inserted IDs: [{', '.join(ids_only) if ids_only else 'N/A'}] ===")
+        for idx, item in enumerate(INSERTED_POSTS_LOG, start=1):
+            print(
+                f"  {idx}. ID: {item.get('id', 'N/A')} | "
+                f"[{item.get('category', '-')}] {item.get('country', '-')} | "
+                f"{item.get('query_used', '-')} | {item.get('title', '-')}"
+            )
+    else:
+        print("=== Inserted IDs: [] (0 posts inserted in this run) ===")
+    print("==================================================\n")
+
+
+def _handle_termination(signum, frame):
+    print_final_run_summary(f"Signal {signum}")
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_termination)
+signal.signal(signal.SIGINT, _handle_termination)
 
 
 def format_strict_title(raw_title, keyword, city, country, year):
@@ -72,22 +124,55 @@ def _route_heavy_assets(route):
         route.continue_()
 
 
-def _build_search_urls(domain: str, keyword: str, city: str, category: str) -> list:
-    clean_dom = _normalize_domain(domain)
-    base_url = f"https://{clean_dom}"
+def _safe_goto(page, url: str, timeout: int = 20000):
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=3000)
+    except Exception:
+        pass
+
+    last_err = None
+    for attempt in range(2):
+        try:
+            resp = page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+            try:
+                page.wait_for_load_state("networkidle", timeout=4000)
+            except Exception:
+                pass
+            return resp
+        except Exception as err:
+            last_err = err
+            msg = str(err).lower()
+            if "interrupted by another navigation" in msg and attempt == 0:
+                time.sleep(0.8)
+                continue
+            raise last_err
+
+
+def _build_search_urls(base_url: str, keyword: str, city: str, category: str) -> list:
+    clean_base = base_url.rstrip("/")
     enc_kw = quote(keyword)
     enc_city = quote(city)
+    cat_l = (category or "").lower()
 
-    if category == "Jobs":
+    if cat_l == "jobs":
         return [
-            f"{base_url}/jobs?q={enc_kw}&l={enc_city}",
-            f"{base_url}/search?q={enc_kw}",
-            base_url,
+            f"{clean_base}/jobs?q={enc_kw}&l={enc_city}",
+            f"{clean_base}/search?q={enc_kw}",
+            f"{clean_base}/?s={enc_kw}+{enc_city}",
+            clean_base,
+        ]
+    if cat_l == "visa":
+        return [
+            f"{clean_base}/search?q={enc_kw}+{enc_city}+visa",
+            f"{clean_base}/?s={enc_kw}+visa+{enc_city}",
+            f"{clean_base}/?s={enc_kw}",
+            clean_base,
         ]
     return [
-        f"{base_url}/search?q={enc_kw}+{enc_city}",
-        f"{base_url}/?s={enc_kw}",
-        base_url,
+        f"{clean_base}/search?q={enc_kw}+{enc_city}",
+        f"{clean_base}/?s={enc_kw}+{enc_city}",
+        f"{clean_base}/?s={enc_kw}",
+        clean_base,
     ]
 
 
@@ -105,17 +190,21 @@ def _get_keywords_for_country_category(target_country: str, category: str) -> li
     return []
 
 
-def _collect_filtered_links(page, base_domain_url: str, blocked_url_terms: list) -> list:
-    raw_links = page.eval_on_selector_all(
-        "a[href]",
-        """elements => elements.map(el => ({
-            href: el.href,
-            text: el.innerText ? el.innerText.trim() : ''
-        }))""",
-    )
+def _collect_filtered_links(page, active_base_url: str, blocked_url_terms: list) -> list:
+    try:
+        raw_links = page.eval_on_selector_all(
+            "a[href]",
+            """elements => elements.map(el => ({
+                href: el.href,
+                text: el.innerText ? el.innerText.trim() : ''
+            }))""",
+        )
+    except Exception:
+        return []
 
     candidate_links = []
     seen_hrefs = set()
+    clean_base = active_base_url.rstrip("/")
 
     for item in raw_links or []:
         href = (item.get("href") or "").strip()
@@ -129,7 +218,7 @@ def _collect_filtered_links(page, base_domain_url: str, blocked_url_terms: list)
             continue
         if any(bad in href_lower or bad in txt_lower for bad in blocked_url_terms):
             continue
-        if href.rstrip("/") == base_domain_url:
+        if href.rstrip("/") == clean_base:
             continue
         if len(title_text) > 10:
             seen_hrefs.add(href)
@@ -149,10 +238,13 @@ def _click_relevant_page_buttons(page, category: str, target_city: str, target_c
     country_l = (target_country or "").lower().strip()
 
     clicked_any = False
-    locators = page.locator("button, a[role='button'], input[type='submit'], a")
-    count = min(locators.count(), 60)
-    clicks_done = 0
+    try:
+        locators = page.locator("button, a[role='button'], input[type='submit'], a")
+        count = min(locators.count(), 60)
+    except Exception:
+        return False
 
+    clicks_done = 0
     for i in range(count):
         if clicks_done >= MAX_BUTTON_CLICKS_PER_PAGE:
             break
@@ -188,9 +280,7 @@ def _click_relevant_page_buttons(page, category: str, target_city: str, target_c
 
 def _score_rich_and_fresh_post(enriched_data: dict, title_text: str, current_year: int) -> int:
     snippet = enriched_data.get("snippet") or ""
-    words = snippet.split()
-    word_count = len(words)
-
+    word_count = len(snippet.split())
     score = min(word_count, 1200)
 
     if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
@@ -232,80 +322,88 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     random.shuffle(domains)
     random.shuffle(keywords)
 
-    country_start = time.monotonic()
     print(
         f"[TRACE-INFO] [{target_country}] -> Domains: {len(domains)} | "
         f"Cities: {len(cities)} | Keywords: {len(keywords)}"
     )
 
     for target_domain in domains:
-        if (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
-            print(f"[TRACE-COUNTRY-CAP] 30-min cap reached for [{target_country}]. Moving to next country.")
-            break
+        active_base_url = None
+        reachable = False
+        last_err = None
 
-        clean_dom = _normalize_domain(target_domain)
-        base_domain_url = f"https://{clean_dom}"
-        domain_start = time.monotonic()
-
-        print(f"\n  [TRACE-DOMAIN] Trying [{base_domain_url}] (Up to 2.5 mins)")
-
-        try:
-            page.goto(base_domain_url, timeout=15000, wait_until="domcontentloaded")
-            page.wait_for_timeout(1200)
-            home_html = (page.content() or "").lower()
-            if any(w in home_html for w in ["please sign in", "log in to continue", "sign in to view", "login required"]):
-                print(f"  [TRACE-WALL] Auth wall on [{clean_dom}]. Skipping domain.")
+        for cand_url in _candidate_base_urls(target_domain):
+            print(f"\n  [TRACE-DOMAIN] Trying [{cand_url}]")
+            try:
+                _safe_goto(page, cand_url, timeout=20000)
+                page.wait_for_timeout(1200)
+                home_html = (page.content() or "").lower()
+                if any(w in home_html for w in ["please sign in", "log in to continue", "sign in to view", "login required"]):
+                    print(f"  [TRACE-WALL] Auth wall on [{cand_url}].")
+                    active_base_url = None
+                    reachable = False
+                    break
+                active_base_url = (page.url or cand_url).rstrip("/")
+                reachable = True
+                break
+            except Exception as conn_err:
+                last_err = conn_err
                 continue
-        except Exception as conn_err:
-            print(f"  [TRACE-DOMAIN-ERROR] [{clean_dom}] failed: {conn_err}. Skipping domain.")
+
+        if not reachable or not active_base_url:
+            print(f"  [TRACE-DOMAIN-ERROR] [{target_domain}] failed: {last_err}. Skipping domain.")
             continue
 
         domain_done = False
 
         for target_city in cities:
-            if domain_done or (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
+            if domain_done:
                 break
 
             for keyword in keywords:
-                if domain_done or (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
+                if domain_done:
                     break
 
-                search_urls = _build_search_urls(clean_dom, keyword, target_city, category)
+                search_urls = _build_search_urls(active_base_url, keyword, target_city, category)
 
                 for s_url in search_urls:
-                    if domain_done or (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
+                    if domain_done:
                         break
 
                     try:
                         print(f"    [TRACE-NAV] {s_url}")
-                        page.goto(s_url, timeout=15000, wait_until="domcontentloaded")
-                        page.wait_for_timeout(1400)
+                        _safe_goto(page, s_url, timeout=20000)
+                        page.wait_for_timeout(1300)
 
                         page_html = (page.content() or "").lower()
                         if any(w in page_html for w in ["sign in to view", "log in to apply", "please login"]):
                             print(f"    [TRACE-WALL] Login wall on search URL. Next keyword/city.")
                             break
 
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                        try:
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                        except Exception:
+                            pass
                         page.wait_for_timeout(700)
 
-                        candidate_links = _collect_filtered_links(page, base_domain_url, blocked_url_terms)
+                        candidate_links = _collect_filtered_links(page, active_base_url, blocked_url_terms)
 
                         if len(candidate_links) < 4:
                             clicked = _click_relevant_page_buttons(page, category, target_city, target_country)
                             if clicked:
-                                page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                                try:
+                                    page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                                except Exception:
+                                    pass
                                 page.wait_for_timeout(800)
-                                candidate_links = _collect_filtered_links(page, base_domain_url, blocked_url_terms)
+                                candidate_links = _collect_filtered_links(page, active_base_url, blocked_url_terms)
 
-                        print(f"      [TRACE-PARSE] {len(candidate_links)} links found on {clean_dom}")
+                        print(f"      [TRACE-PARSE] {len(candidate_links)} links found on {active_base_url}")
 
                         evaluated_posts = []
                         links_slice = candidate_links[:MAX_CANDIDATE_LINKS]
 
                         for idx, (j_link, j_title) in enumerate(links_slice):
-                            if (time.monotonic() - domain_start) > MAX_TIME_PER_DOMAIN_SEC or (time.monotonic() - country_start) > MAX_TIME_PER_COUNTRY_SEC:
-                                break
                             if is_already_scraped(j_link):
                                 continue
 
@@ -362,20 +460,37 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             base_snippet = best_data.get("snippet") or ""
                             final_snippet = f"{base_snippet}\n\nDetails:\n" + "\n".join(cta_parts)
 
+                            query_label = f"Query: {keyword} on {target_domain}"
+                            country_label = f"{target_country} ({target_city})"
+
                             insert_data = {
                                 "title": final_title,
                                 "snippet": final_snippet,
                                 "link": final_url,
-                                "country": f"{target_country} ({target_city})",
+                                "country": country_label,
                                 "category": category,
-                                "query_used": f"Query: {keyword} on {clean_dom}",
+                                "query_used": query_label,
                                 "status": "pending",
                                 "audit_status": None,
                             }
 
                             try:
-                                supabase.table("zunex").insert(insert_data).execute()
-                                print(f"  [TRACE-DONE] Saved best post (score={best_score}) for [{target_country}]: {final_title}")
+                                res = supabase.table("zunex").insert(insert_data).execute()
+                                inserted_id = None
+                                if getattr(res, "data", None) and isinstance(res.data, list) and len(res.data) > 0:
+                                    inserted_id = res.data[0].get("id")
+
+                                INSERTED_POSTS_LOG.append({
+                                    "id": inserted_id,
+                                    "title": final_title,
+                                    "country": country_label,
+                                    "category": category,
+                                    "query_used": query_label,
+                                })
+                                print(
+                                    f"  [TRACE-DONE] Saved post ID={inserted_id} (score={best_score}) "
+                                    f"for [{target_country}]: {final_title}"
+                                )
                                 page.wait_for_timeout(1200)
                                 domain_done = True
                                 return True
@@ -387,15 +502,89 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                         print(f"    [TRACE-NAV-ERROR] {nav_err}")
                         continue
 
-        print(f"  [TRACE-DOMAIN-NEXT] Moving past [{clean_dom}].")
+        print(f"  [TRACE-DOMAIN-NEXT] Moving past [{target_domain}].")
 
     print(f"[TRACE-COUNTRY-NEXT] Finished all checks for [{target_country}] ({category}). Moving to next country.")
     return False
 
 
+def _execute_full_cycle(p, day_countries, current_year, blocked_url_terms):
+    browser = p.chromium.launch(
+        headless=True,
+        args=[
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-blink-features=AutomationControlled",
+            "--ignore-certificate-errors",
+            "--ignore-ssl-errors",
+        ],
+    )
+
+    context = browser.new_context(
+        user_agent=random.choice(USER_AGENTS),
+        viewport={"width": 1366, "height": 768},
+        bypass_csp=True,
+        ignore_https_errors=True,
+    )
+    context.route("**/*", _route_heavy_assets)
+
+    page = context.new_page()
+    page.set_default_timeout(20000)
+
+    cycle_inserted = 0
+    try:
+        print(f"\n--------------------------------------------------")
+        print(f"--- PHASE 1: 1 POST PER COUNTRY (JOBS) -----------")
+        print(f"--------------------------------------------------")
+        jobs_saved = 0
+        for country in day_countries:
+            if search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms):
+                jobs_saved += 1
+                cycle_inserted += 1
+        print(f"[TRACE-PHASE1] Jobs saved this cycle: {jobs_saved}/{len(day_countries)}")
+
+        print(f"\n--------------------------------------------------")
+        print(f"--- PHASE 2: VISA POSTS ------------------------")
+        print(f"--------------------------------------------------")
+        visa_saved = 0
+        for country in day_countries:
+            if visa_saved >= 2:
+                break
+            if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
+                visa_saved += 1
+                cycle_inserted += 1
+        print(f"[TRACE-PHASE2] Visa saved this cycle: {visa_saved}/2")
+
+        print(f"\n--------------------------------------------------")
+        print(f"--- PHASE 3: TRAVEL POSTS ----------------------")
+        print(f"--------------------------------------------------")
+        travel_saved = 0
+        for country in day_countries:
+            if travel_saved >= 2:
+                break
+            if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
+                travel_saved += 1
+                cycle_inserted += 1
+        print(f"[TRACE-PHASE3] Travel saved this cycle: {travel_saved}/2")
+    finally:
+        try:
+            context.close()
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+        print("[TRACE-SHUTDOWN] Browser closed.")
+
+    return cycle_inserted
+
+
 def run_independent_crawler():
     if not supabase:
         print("[TRACE-CRITICAL] Supabase client is not initialized.")
+        print_final_run_summary("Supabase Init Failed")
         return
 
     today = datetime.now().strftime("%A")
@@ -409,6 +598,7 @@ def run_independent_crawler():
 
     if not day_countries:
         print("[TRACE-INFO] No countries scheduled for today.")
+        print_final_run_summary("No Scheduled Countries")
         return
 
     blocked_url_terms = [
@@ -418,76 +608,25 @@ def run_independent_crawler():
         "/employers", "/about", "/contact",
     ]
 
+    exit_reason = "Completed"
     with sync_playwright() as p:
-        print("[TRACE-INIT] Launching Chromium...")
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-gpu",
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-blink-features=AutomationControlled",
-                "--ignore-certificate-errors",
-                "--ignore-ssl-errors",
-            ],
-        )
-
-        context = browser.new_context(
-            user_agent=random.choice(USER_AGENTS),
-            viewport={"width": 1366, "height": 768},
-            bypass_csp=True,
-            ignore_https_errors=True,
-        )
-        context.route("**/*", _route_heavy_assets)
-
-        page = context.new_page()
-        page.set_default_timeout(20000)
-
         try:
-            print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 1: 1 POST PER COUNTRY (JOBS) -----------")
-            print(f"--------------------------------------------------")
-            jobs_saved = 0
-            for country in day_countries:
-                if search_and_insert_post(page, country, "Jobs", current_year, blocked_url_terms):
-                    jobs_saved += 1
-            print(f"[TRACE-PHASE1] Jobs saved today: {jobs_saved}/{len(day_countries)}")
-
-            print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 2: VISA POSTS ------------------------")
-            print(f"--------------------------------------------------")
-            visa_saved = 0
-            for country in day_countries:
-                if visa_saved >= 2:
+            for attempt in range(1, MAX_ZERO_POST_RETRIES + 1):
+                print(f"\n[TRACE-CYCLE] Starting full cycle attempt {attempt}/{MAX_ZERO_POST_RETRIES}...")
+                inserted_in_cycle = _execute_full_cycle(p, day_countries, current_year, blocked_url_terms)
+                if inserted_in_cycle > 0:
+                    exit_reason = f"Completed (Attempt {attempt}, Inserted: {inserted_in_cycle})"
                     break
-                if search_and_insert_post(page, country, "Visa", current_year, blocked_url_terms):
-                    visa_saved += 1
-            print(f"[TRACE-PHASE2] Visa saved today: {visa_saved}/2")
-
-            print(f"\n--------------------------------------------------")
-            print(f"--- PHASE 3: TRAVEL POSTS ----------------------")
-            print(f"--------------------------------------------------")
-            travel_saved = 0
-            for country in day_countries:
-                if travel_saved >= 2:
-                    break
-                if search_and_insert_post(page, country, "Travel", current_year, blocked_url_terms):
-                    travel_saved += 1
-            print(f"[TRACE-PHASE3] Travel saved today: {travel_saved}/2")
-
-            print(f"\n==================================================")
-            print("=== CRAWLER FINISHED ===")
-            print(f"==================================================")
-
+                if attempt < MAX_ZERO_POST_RETRIES:
+                    print(f"[TRACE-RETRY] 0 posts inserted in attempt {attempt}. Restarting full cycle...")
+                    time.sleep(2)
+                else:
+                    exit_reason = f"Completed with 0 posts after {MAX_ZERO_POST_RETRIES} full cycles"
         except Exception as e:
+            exit_reason = f"Error: {e}"
             print(f"[TRACE-CRITICAL-ERROR] {e}")
         finally:
-            try:
-                context.close()
-            except Exception:
-                pass
-            browser.close()
-            print("[TRACE-SHUTDOWN] Browser closed.")
+            print_final_run_summary(exit_reason)
 
 
 if __name__ == "__main__":
