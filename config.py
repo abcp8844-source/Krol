@@ -6,32 +6,46 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
 
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0",
 ]
 
-# Playwright Optimized Browser Settings
 PLAYWRIGHT_CONFIG = {
     "headless": True,
     "viewport": {"width": 1366, "height": 768},
+    "user_agent": USER_AGENTS[0],
+    "locale": "en-US",
+    "ignore_https_errors": True,
+    "java_script_enabled": True,
+    "accept_downloads": False,
+    "navigation_timeout": 30000,
+    "default_timeout": 15000,
     "args": [
         "--disable-gpu",
         "--no-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-blink-features=AutomationControlled"
-    ]
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--disable-background-networking",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--mute-audio",
+    ],
 }
 
 SCHEDULE = {
     "Monday": ["UAE", "Saudi Arabia", "Qatar", "Bahrain", "Kuwait", "Oman"],
     "Tuesday": ["Japan", "South Korea", "China", "Taiwan", "Singapore", "Hong Kong"],
-    "Wednesday": ["Thailand", "Vietnam", "Malaysia", "Indonesia", "Philippines", "Singapore"],
+    "Wednesday": ["Thailand", "Vietnam", "Malaysia", "Indonesia", "Philippines", "Pakistan"],
     "Thursday": ["Germany", "France", "Netherlands", "Belgium", "Switzerland", "Austria"],
     "Friday": ["UK", "Ireland", "Sweden", "Norway", "Denmark", "Finland"],
     "Saturday": ["Canada", "USA", "Mexico", "Panama", "Brazil", "Argentina"],
-    "Sunday": ["Italy", "Turkey", "Azerbaijan", "Georgia", "Spain", "Greece"]
+    "Sunday": ["Italy", "Turkey", "Azerbaijan", "Georgia", "Spain", "Greece", "India"],
 }
 
 COUNTRY_CITIES = {
@@ -75,5 +89,7 @@ COUNTRY_CITIES = {
     "Azerbaijan": ["Baku", "Ganja"],
     "Georgia": ["Tbilisi", "Batumi"],
     "Spain": ["Madrid", "Barcelona", "Valencia", "Seville"],
-    "Greece": ["Athens", "Thessaloniki"]
+    "Greece": ["Athens", "Thessaloniki"],
+    "Pakistan": ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad"],
+    "India": ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai"],
 }
