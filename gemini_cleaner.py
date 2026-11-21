@@ -16,22 +16,23 @@ gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
 def evaluate_and_clean_content(old_title, old_snippet, target_country="", target_category="Jobs"):
     prompt = f"""
-    You are an elite, highly intelligent data quality gatekeeper and professional translator for international Job, Visa, and Travel portals.
-    Do not rely blindly on rigid rules; use your own independent brain, advanced reasoning, and autonomous judgment to thoroughly inspect the provided content.
-    
+    You are a sharp, thorough data quality auditor and translator for international Job, Visa, and Travel portals.
+    Inspect the provided raw post carefully so useful details, contact/application info, eligibility rules, requirements, salaries, or travel/visa facts are caught and preserved cleanly.
+
     Target Country: {target_country}
     Target Category: {target_category}
     Current Title: {old_title}
     Current Snippet: {old_snippet}
 
-    AUTONOMOUS COGNITIVE EVALUATION & OPERATIONAL RULES:
-    1. **Lenient & Balanced Assessment (60-70% Rule):** If the content has even 60% to 70% useful, substantive, or actionable value regarding the target category and country, DO NOT reject it. Preserve the core details. Aim to keep comprehensive and detailed descriptions rather than aggressively shortening it. 
-    2. **Independent Category & Country Verification:** Use your own intelligence to verify if the content genuinely belongs to the target country and category. Look beyond mere keywords; understand the deep context.
-    3. **Action Determination ("action"):**
-       - Return "reject" ONLY if the post is pure junk, completely empty, or completely devoid of any utility (lacks even 60% useful info). In this case, title and snippet will be null.
-       - Return "no_change" if the content is already pristine, perfectly rich, and requires zero cleaning or modification.
-       - Return "update" if the content contains valid actionable data mixed with noise, requiring surgical cleaning and professional translation while preserving core facts.
-    4. **Zero Fabrication:** Never invent fake data. Only clean, translate, and polish real facts present in the text.
+    DETAILED INSPECTION & RETENTION RULES:
+    1. **Maximize Useful Information Retention:** Keep as much real, substantive information as exists in the source—whether it spans 400–800 words/characters or even up to ~1,200+ words/characters of genuine details. Do not compress away real facts, numbers, dates, requirements, contacts, or instructions.
+    2. **Catch Important Details:** Pay close attention to specific entities/companies/institutions, role/visa/travel specifics, compensation or fees, qualifications/eligibility, deadlines/timelines, and how/where to apply or contact. If details are scattered or roughly formatted, organize them cleanly without losing substance.
+    3. **Country & Category Check:** Verify that the post genuinely aligns with the Target Country ({target_country}) and Target Category ({target_category}). Reject only when it is completely off-topic, empty/pure junk, or a generic salary/market overview with no actionable job, visa, or travel details.
+    4. **Action Determination ("action"):**
+       - Return `"reject"` if the post is pure junk, empty, off-topic/mismatched, or has no real actionable substance. (Set `title` and `snippet` to `null`).
+       - Return `"no_change"` if the content is already clean, accurate, and needs no edits.
+       - Return `"update"` if the content has real value and needs cleaning, structuring, or translation while retaining maximum factual detail.
+    5. **Zero Fabrication:** Never invent missing facts, links, emails, salaries, or rules. Only clean, organize, and translate what is present.
 
     OUTPUT FORMAT: Return strictly a valid JSON object with three keys:
     - "action": "reject" | "no_change" | "update"
