@@ -15,6 +15,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+MAX_NEARBY_LINKS = 14
 DANGEROUS_CLICK_TERMS = [
     "login", "log in", "sign in", "signin", "sign up", "signup", "register",
     "delete", "remove", "unsubscribe", "decline", "reject", "cookie settings",
@@ -114,6 +115,42 @@ def _is_not_found_page(html_lower: str) -> bool:
     return len(html_lower) < 4000 and any(m in html_lower for m in markers)
 
 
+def _has_relevant_page_signal(page, category: str, keyword: str, city: str, country: str) -> bool:
+    try:
+        body_l = (page.inner_text("body") or "").lower()
+    except Exception:
+        body_l = (page.content() or "").lower()
+
+    cat_signals = {
+        "jobs": ["job", "jobs", "career", "careers", "salary", "apply", "vacancy", "vacancies", "hiring", "vagas", "empleo", "emploi"],
+        "visa": ["visa", "visas", "immigration", "permit", "residence", "residency", "embassy", "consulate", "entry"],
+        "travel": ["travel", "tour", "tours", "flight", "flights", "hotel", "hotels", "itinerary", "trip", "holiday"],
+    }
+    terms = list(cat_signals.get((category or "").lower(), cat_signals["jobs"]))
+    if keyword:
+        terms.append(keyword.lower())
+    if city:
+        terms.append(city.lower())
+    if country:
+        terms.append(country.lower())
+
+    return any(t in body_l for t in terms if t)
+
+
+def _sweep_and_scroll_page(page):
+    try:
+        total_h = page.evaluate("document.body.scrollHeight || 1200")
+        steps = 4
+        for s in range(1, steps + 1):
+            y = int((total_h * s) / steps)
+            page.evaluate(f"window.scrollTo(0, {y});")
+            time.sleep(0.45)
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.6)
+    except Exception:
+        pass
+
+
 def _extract_links_from_page(page, active_base_url: str, blocked_url_terms: list) -> list:
     raw_links = page.eval_on_selector_all(
         "a[href]",
@@ -143,7 +180,7 @@ def _extract_links_from_page(page, active_base_url: str, blocked_url_terms: list
         clean_link = full_link.rstrip("/")
         if clean_link == active_base_url or full_link in seen:
             continue
-        if len(title_text) > 12:
+        if len(title_text) > 10:
             seen.add(full_link)
             candidate_links.append((full_link, title_text))
 
@@ -152,9 +189,9 @@ def _extract_links_from_page(page, active_base_url: str, blocked_url_terms: list
 
 def _click_relevant_controls(page, category: str, target_city: str, target_country: str) -> bool:
     category_terms = {
-        "Jobs": ["job", "jobs", "career", "careers", "hiring", "vacancy", "vacancies", "latest", "openings", "search", "load more", "show more"],
-        "Visa": ["visa", "visas", "immigration", "permit", "work permit", "residency", "entry", "latest", "search", "load more", "show more"],
-        "Travel": ["travel", "tour", "tours", "hotel", "hotels", "flight", "flights", "holiday", "package", "latest", "search", "load more", "show more"],
+        "Jobs": ["job", "jobs", "career", "careers", "hiring", "vacancy", "vacancies", "latest", "openings", "search", "load more", "show more", "more"],
+        "Visa": ["visa", "visas", "immigration", "permit", "work permit", "residency", "entry", "latest", "search", "load more", "show more", "more"],
+        "Travel": ["travel", "tour", "tours", "hotel", "hotels", "flight", "flights", "holiday", "package", "latest", "search", "load more", "show more", "more"],
     }
     terms = list(category_terms.get(category, category_terms["Jobs"]))
     city_l = (target_city or "").lower().strip()
@@ -162,7 +199,7 @@ def _click_relevant_controls(page, category: str, target_city: str, target_count
 
     clicked = False
     locators = page.locator("button, a[role='button'], input[type='submit'], a")
-    total = min(locators.count(), 60)
+    total = min(locators.count(), 65)
     clicks_used = 0
 
     for i in range(total):
@@ -186,6 +223,7 @@ def _click_relevant_controls(page, category: str, target_city: str, target_count
                 el.scroll_into_view_if_needed(timeout=1500)
                 el.click(timeout=2500)
                 time.sleep(1.2)
+                _sweep_and_scroll_page(page)
                 clicks_used += 1
                 clicked = True
                 print(f"      [TRACE-CLICK] Clicked control: [{label}]")
@@ -195,12 +233,32 @@ def _click_relevant_controls(page, category: str, target_city: str, target_count
     return clicked
 
 
+def _score_post_richness(enriched_data: dict, title_text: str, current_year: int) -> int:
+    snippet = enriched_data.get("snippet") or ""
+    score = min(len(snippet.split()), 1200)
+    if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
+        score += 120
+    if enriched_data.get("location"):
+        score += 60
+    if enriched_data.get("phone"):
+        score += 80
+    if enriched_data.get("email"):
+        score += 80
+    combined_l = f"{title_text} {snippet}".lower()
+    if str(current_year) in combined_l or str(current_year - 1) in combined_l:
+        score += 120
+    return score
+
+
 def _try_process_links(page, candidate_links, active_base_url, raw_domain, target_country, target_city, category, keyword, current_year):
-    for j_link, j_title in candidate_links[:20]:
+    evaluated = []
+    links_to_check = candidate_links[:MAX_NEARBY_LINKS]
+
+    for j_link, j_title in links_to_check:
         if is_already_scraped(j_link):
             continue
 
-        print(f"        [TRACE-EXTRACT] Extracting details for: {j_link}")
+        print(f"        [TRACE-EXTRACT] Checking nearby link: {j_link}")
         enriched_data = extract_strict_job_details(
             page,
             j_link,
@@ -220,38 +278,49 @@ def _try_process_links(page, candidate_links, active_base_url, raw_domain, targe
             if target_country.lower() not in final_title.lower() and target_city.lower() not in final_title.lower():
                 continue
 
-            cta_parts = []
-            if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
-                cta_parts.append(f"Estimated Amount/Salary: {enriched_data['salary']}")
-            if enriched_data.get("location"):
-                cta_parts.append(f"Location/City: {enriched_data['location']}")
-            if enriched_data.get("phone"):
-                cta_parts.append(f"Contact/Phone: {enriched_data['phone']}")
-            if enriched_data.get("email"):
-                cta_parts.append(f"Email: {enriched_data['email']}")
-            cta_parts.append(f"Direct Apply Link: {enriched_data['finalUrl']}")
+            score = _score_post_richness(enriched_data, j_title, current_year)
+            evaluated.append((score, final_title, enriched_data))
 
-            final_snippet = enriched_data.get("snippet", "") + "\n\nDetails:\n" + "\n".join(cta_parts)
+            if len(evaluated) >= 3 and score >= 750:
+                break
 
-            insert_data = {
-                "title": final_title,
-                "snippet": final_snippet,
-                "link": enriched_data["finalUrl"],
-                "country": f"{target_country} ({target_city})",
-                "category": category,
-                "query_used": f"Query: {keyword} on {raw_domain}",
-                "status": "pending",
-                "audit_status": None,
-            }
-            try:
-                supabase.table("zunex").insert(insert_data).execute()
-                print(f"  [TRACE-SUCCESS] Saved post to DB: {final_title}")
-                time.sleep(3)
-                return True
-            except Exception as db_err:
-                print(f"  [TRACE-DB-ERROR] {db_err}")
-                continue
-    return False
+    if not evaluated:
+        return False
+
+    evaluated.sort(key=lambda x: x[0], reverse=True)
+    best_score, final_title, best_data = evaluated[0]
+
+    cta_parts = []
+    if best_data.get("salary") and best_data["salary"] != "Not Specified":
+        cta_parts.append(f"Estimated Amount/Salary: {best_data['salary']}")
+    if best_data.get("location"):
+        cta_parts.append(f"Location/City: {best_data['location']}")
+    if best_data.get("phone"):
+        cta_parts.append(f"Contact/Phone: {best_data['phone']}")
+    if best_data.get("email"):
+        cta_parts.append(f"Email: {best_data['email']}")
+    cta_parts.append(f"Direct Apply Link: {best_data['finalUrl']}")
+
+    final_snippet = best_data.get("snippet", "") + "\n\nDetails:\n" + "\n".join(cta_parts)
+
+    insert_data = {
+        "title": final_title,
+        "snippet": final_snippet,
+        "link": best_data["finalUrl"],
+        "country": f"{target_country} ({target_city})",
+        "category": category,
+        "query_used": f"Query: {keyword} on {raw_domain}",
+        "status": "pending",
+        "audit_status": None,
+    }
+    try:
+        supabase.table("zunex").insert(insert_data).execute()
+        print(f"  [TRACE-SUCCESS] Saved post (score={best_score}) to DB: {final_title}")
+        time.sleep(3)
+        return True
+    except Exception as db_err:
+        print(f"  [TRACE-DB-ERROR] {db_err}")
+        return False
 
 
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
@@ -353,15 +422,14 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                             continue
 
                         consecutive_not_found = 0
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(1)
+                        _sweep_and_scroll_page(page)
+
+                        if _has_relevant_page_signal(page, category, keyword, target_city, target_country):
+                            _click_relevant_controls(page, category, target_city, target_country)
 
                         candidate_links = _extract_links_from_page(page, active_base_url, blocked_url_terms)
-                        if len(candidate_links) < 4:
-                            if _click_relevant_controls(page, category, target_city, target_country):
-                                page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-                                time.sleep(1)
-                                candidate_links = _extract_links_from_page(page, active_base_url, blocked_url_terms)
+                        if not candidate_links and _click_relevant_controls(page, category, target_city, target_country):
+                            candidate_links = _extract_links_from_page(page, active_base_url, blocked_url_terms)
 
                         print(f"      [TRACE-PARSE] Found {len(candidate_links)} candidate links on {target_domain}")
 
