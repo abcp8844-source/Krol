@@ -1,24 +1,13 @@
 import re
-from config import SCHEDULE
+from datetime import datetime
+from config import SCHEDULE, COUNTRY_CITIES
+from keywords import COUNTRY_KEYWORDS
+
 try:
-    from keywords import KEYWORDS
+    from config import SEARCH_COUNTRY_NAMES, SEARCH_CITY_NAMES
 except ImportError:
-    KEYWORDS = {}
-
-ALL_COUNTRIES = [c for country_list in SCHEDULE.values() for c in country_list]
-
-APPLY_SIGNALS = [
-    "how to apply", "apply now", "apply here", "apply online", "submit application",
-    "send your cv", "send cv", "send resume", "upload resume", "upload cv",
-    "application process", "application steps", "hiring process", "contact hr",
-    "whatsapp", "apply via", "career portal", "job portal", "interview", "vacancy"
-]
-
-VISA_TRAVEL_SIGNALS = [
-    "requirements", "documents required", "eligibility", "application fee", "visa fee",
-    "processing time", "how to apply", "steps", "itinerary", "booking", "validity",
-    "embassy", "consulate", "passport", "permit", "rules", "regulations"
-]
+    SEARCH_COUNTRY_NAMES = {}
+    SEARCH_CITY_NAMES = {}
 
 
 def clean_text_content(text):
@@ -32,23 +21,17 @@ def clean_text_content(text):
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
-def has_actionable_substance(text_lower, email, phone, apply_links, category):
-    cat = (category or "Jobs").lower()
-    has_contact = bool(email or phone or apply_links)
-
-    if cat == "jobs":
-        has_apply_phrase = any(sig in text_lower for sig in APPLY_SIGNALS)
-        return has_apply_phrase or (has_contact and ("apply" in text_lower or "resume" in text_lower or "cv" in text_lower or "job" in text_lower))
-
-    if cat in ("visa", "travel"):
-        signal_hits = sum(1 for sig in VISA_TRAVEL_SIGNALS if sig in text_lower)
-        return signal_hits >= 2 or (signal_hits >= 1 and has_contact)
-
-    return any(sig in text_lower for sig in APPLY_SIGNALS) or sum(1 for sig in VISA_TRAVEL_SIGNALS if sig in text_lower) >= 2
-
-
 def extract_strict_job_details(page, target_url, target_country, target_city, category="Jobs", search_keyword=""):
     try:
+        today_name = datetime.now().strftime("%A")
+        scheduled_countries = SCHEDULE.get(today_name, [])
+        if scheduled_countries and target_country not in scheduled_countries:
+            return None
+
+        valid_cities = COUNTRY_CITIES.get(target_country, [])
+        if valid_cities and target_city not in valid_cities:
+            return None
+
         page.goto(target_url, wait_until="domcontentloaded", timeout=25000)
         page.wait_for_timeout(2000)
 
@@ -96,43 +79,24 @@ def extract_strict_job_details(page, target_url, target_country, target_city, ca
         page_text = clean_text_content(extracted_data.get("pageText", ""))
         page_text_lower = page_text.lower()
 
-        is_truly_blocked = (
-            len(page_text_lower) < 300
-            and any(
-                b in page_text_lower
-                for b in [
-                    "access denied",
-                    "additional verification required",
-                    "ray id:",
-                    "checking your browser before accessing",
-                ]
-            )
-        )
-        if is_truly_blocked:
+        country_names = [target_country, SEARCH_COUNTRY_NAMES.get(target_country, "")]
+        city_names = [target_city, SEARCH_CITY_NAMES.get(target_city, "")]
+
+        country_matched = any(c.strip().lower() in page_text_lower for c in country_names if c and c.strip())
+        city_matched = any(ct.strip().lower() in page_text_lower for ct in city_names if ct and ct.strip())
+
+        if not (country_matched and city_matched):
             return None
 
-        if any(
-            j in page_text_lower
-            for j in [
-                "this job listing is no longer available",
-                "expired job posting",
-                "job has expired",
-            ]
-        ):
+        category_keywords = COUNTRY_KEYWORDS.get(target_country, {}).get(category, [])
+        category_matched = False
+        if search_keyword and search_keyword.lower() in page_text_lower:
+            category_matched = True
+        elif category_keywords and any(kw.lower() in page_text_lower for kw in category_keywords):
+            category_matched = True
+
+        if not category_matched:
             return None
-
-        if target_country.lower() not in page_text_lower and target_city.lower() not in page_text_lower:
-            return None
-
-        for other_country in ALL_COUNTRIES:
-            if other_country.lower() != target_country.lower():
-                if other_country.lower() in page_text_lower[:400]:
-                    return None
-
-        category_keywords = KEYWORDS.get(category, [])
-        if category_keywords and not any(kw.lower() in page_text_lower for kw in category_keywords):
-            if search_keyword and search_keyword.lower() not in page_text_lower:
-                return None
 
         email_match = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", page_text)
         email = email_match.group(0) if email_match else ""
@@ -145,9 +109,6 @@ def extract_strict_job_details(page, target_url, target_country, target_city, ca
 
         apply_links = extracted_data.get("applyLinks", [])
 
-        if not has_actionable_substance(page_text_lower, email, phone, apply_links, category):
-            return None
-
         salary = "Not Specified"
         salary_match = re.search(
             r"(?:salary|pay|wage|compensation|fee|price|USD|EUR|AED|QAR|SAR|SGD|GBP|CAD|AUD|\$|₺|€|£|¥|฿)\s*[:\-]?\s*[\d,]+\s*(?:-|to)?\s*[\d,]*",
@@ -159,7 +120,7 @@ def extract_strict_job_details(page, target_url, target_country, target_city, ca
             if "0.00" not in sal_text:
                 salary = sal_text
 
-        location = target_city
+        location = SEARCH_CITY_NAMES.get(target_city) or target_city
         loc_match = re.search(
             r"(?:Location|City|Address|Area|Ubicación):\s*([A-Za-z\s,]+)",
             page_text,
@@ -179,9 +140,6 @@ def extract_strict_job_details(page, target_url, target_country, target_city, ca
             combined_details += "\n\nApplication Links:\n" + "\n".join([f"- {lnk}" for lnk in apply_links])
 
         words = combined_details.split()
-        if len(words) < 400:
-            return None
-
         final_snippet = " ".join(words[:800])
 
         return {
