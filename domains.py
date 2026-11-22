@@ -1,33 +1,29 @@
 COUNTRY_DOMAINS = {
     "UAE": [
-        "dubizzle.com",
-        "khaleejtimes.com",
-        "gulfnews.com",
         "mohre.gov.ae",
         "icp.gov.ae",
         "u.ae",
         "naukrigulf.com",
         "gulftalent.com",
+        "khaleejtimes.com",
+        "gulfnews.com",
         "visitdubai.com"
     ],
     "Saudi Arabia": [
         "jadarat.sa",
         "qiwa.sa",
         "hrsd.gov.sa",
-        "haraj.com.sa",
         "visa.mofa.gov.sa",
-        "absher.sa",
         "naukrigulf.com",
         "gulftalent.com",
         "visitsaudi.com"
     ],
     "Qatar": [
-        "qatarliving.com",
-        "iloveqatar.net",
-        "mzadqatar.com",
         "mol.gov.qa",
         "portal.moi.gov.qa",
         "hukoomi.gov.qa",
+        "qatarliving.com",
+        "iloveqatar.net",
         "naukrigulf.com",
         "visitqatar.com"
     ],
@@ -40,7 +36,6 @@ COUNTRY_DOMAINS = {
         "gulftalent.com"
     ],
     "Kuwait": [
-        "opensooq.com",
         "manpower.gov.kw",
         "e.gov.kw",
         "moi.gov.kw",
@@ -68,28 +63,20 @@ COUNTRY_DOMAINS = {
     ],
     "South Korea": [
         "work.go.kr",
-        "saramin.co.kr",
-        "jobkorea.co.kr",
-        "wanted.co.kr",
         "eps.go.kr",
         "visa.go.kr",
         "hikorea.go.kr",
+        "wanted.co.kr",
         "visitkorea.or.kr"
     ],
     "China": [
-        "bosszhipin.com",
-        "51job.com",
-        "zhaopin.com",
-        "echinacities.com",
         "nia.gov.cn",
         "mfa.gov.cn",
         "english.www.gov.cn",
+        "echinacities.com",
         "chinajob.com"
     ],
     "Taiwan": [
-        "104.com.tw",
-        "1111.com.tw",
-        "yes123.com.tw",
         "job.taiwan.gov.tw",
         "wda.gov.tw",
         "boca.gov.tw",
@@ -174,7 +161,6 @@ COUNTRY_DOMAINS = {
         "stepstone.de",
         "auswaertiges-amt.de",
         "bamf.de",
-        "xing.com",
         "honeypot.io",
         "germany.travel"
     ],
@@ -195,7 +181,6 @@ COUNTRY_DOMAINS = {
         "undutchables.nl",
         "ind.nl",
         "netherlandsworldwide.nl",
-        "monsterboard.nl",
         "holland.com"
     ],
     "Belgium": [
@@ -221,7 +206,6 @@ COUNTRY_DOMAINS = {
     "Austria": [
         "ams.at",
         "karriere.at",
-        "willhaben.at",
         "stepstone.at",
         "migration.gv.at",
         "oesterreich.gv.at",
@@ -250,7 +234,6 @@ COUNTRY_DOMAINS = {
     ],
     "Sweden": [
         "arbetsformedlingen.se",
-        "jobb.blocket.se",
         "jobbland.se",
         "migrationsverket.se",
         "sweden.se",
@@ -259,7 +242,6 @@ COUNTRY_DOMAINS = {
     ],
     "Norway": [
         "arbeidsplassen.nav.no",
-        "finn.no",
         "jobbnorge.no",
         "nav.no",
         "udi.no",
@@ -299,7 +281,6 @@ COUNTRY_DOMAINS = {
         "uscis.gov",
         "travel.state.gov",
         "usa.gov",
-        "ziprecruiter.com",
         "dice.com",
         "visittheusa.com"
     ],
@@ -316,7 +297,6 @@ COUNTRY_DOMAINS = {
         "empleospanama.gob.pa",
         "konzerta.com",
         "computrabajo.com.pa",
-        "encuentra24.com",
         "mitradel.gob.pa",
         "migracion.gob.pa",
         "tourismpanama.com"
@@ -326,7 +306,6 @@ COUNTRY_DOMAINS = {
         "gupy.io",
         "vagas.com.br",
         "infojobs.com.br",
-        "catho.com.br",
         "gov.br",
         "visitbrasil.com"
     ],
@@ -341,8 +320,6 @@ COUNTRY_DOMAINS = {
     ],
     "Italy": [
         "cliclavoro.gov.it",
-        "subito.it",
-        "bakeca.it",
         "infojobs.it",
         "lavoro.gov.it",
         "vistoperitalia.esteri.it",
@@ -394,7 +371,6 @@ COUNTRY_DOMAINS = {
         "dypa.gov.gr",
         "kariera.gr",
         "skywalker.gr",
-        "xe.gr",
         "jobfind.gr",
         "migration.gov.gr",
         "mfa.gr",
