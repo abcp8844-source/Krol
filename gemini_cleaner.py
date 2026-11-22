@@ -15,7 +15,7 @@ gemini_api_key = raw_api_key.strip() if raw_api_key else None
 gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
 def evaluate_and_clean_content(old_title, old_snippet, target_country="", target_category="Jobs"):
-   prompt = f"""
+    prompt = f"""
     You are a strict, practical data cleaner and translator for an international Job, Visa, and Travel portal.
     Keep all genuine, important job-related details that are present—including location, eligibility (citizens, non-citizens/outsiders, or local residents), requirements, contact details, or links—and never drop real material just because salary or extra fields are absent. However, for Jobs, you MUST check whether there is an actual hiring or application process (how to apply, where to go, or steps to apply). If a post is only general information without a real hiring/application method, reject it (`"reject"`). Only posts that have a genuine hiring/application method should be treated as actionable and kept (`"update"`).
 
@@ -35,7 +35,7 @@ def evaluate_and_clean_content(old_title, old_snippet, target_country="", target
     - "title": cleaned/translated title (or null if rejected)
     - "snippet": cleaned/translated snippet (or null if rejected)
     """
-    
+
     models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
 
     for model_name in models_to_try:
@@ -109,7 +109,7 @@ def run_cleaner():
                 print(f"[RESULT] Snippet was empty. Main status & audit_status set to success.")
             except Exception as db_err:
                 print(f"[DB ERROR] Failed to update empty Post ID {post_id}: {str(db_err)}")
-            
+
             processed_count += 1
             continue
 
