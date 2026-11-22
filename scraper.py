@@ -21,6 +21,52 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+CATEGORY_TRANSLATIONS = {
+    "UAE": {"Jobs": "وظائف", "Visa": "تأشيرة", "Travel": "سفر"},
+    "Saudi Arabia": {"Jobs": "وظائف", "Visa": "تأشيرة", "Travel": "سياحة"},
+    "Qatar": {"Jobs": "وظائف", "Visa": "تأشيرة", "Travel": "سفر"},
+    "Bahrain": {"Jobs": "وظائف", "Visa": "تأشيرة", "Travel": "سفر"},
+    "Kuwait": {"Jobs": "وظائف", "Visa": "تأشيرة", "Travel": "سفر"},
+    "Oman": {"Jobs": "وظائف", "Visa": "تأشيرة", "Travel": "سفر"},
+    "Japan": {"Jobs": "求人", "Visa": "ビザ", "Travel": "旅行"},
+    "South Korea": {"Jobs": "채용", "Visa": "비자", "Travel": "여행"},
+    "China": {"Jobs": "招聘", "Visa": "签证", "Travel": "旅游"},
+    "Taiwan": {"Jobs": "職缺", "Visa": "簽證", "Travel": "旅遊"},
+    "Singapore": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "Hong Kong": {"Jobs": "招聘", "Visa": "簽證", "Travel": "旅遊"},
+    "Thailand": {"Jobs": "งาน", "Visa": "วีซ่า", "Travel": "ท่องเที่ยว"},
+    "Vietnam": {"Jobs": "Việc làm", "Visa": "Visa", "Travel": "Du lịch"},
+    "Malaysia": {"Jobs": "Kerja", "Visa": "Visa", "Travel": "Percutian"},
+    "Indonesia": {"Jobs": "Lowongan", "Visa": "Visa", "Travel": "Wisata"},
+    "Philippines": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "Germany": {"Jobs": "Jobs", "Visa": "Visum", "Travel": "Reisen"},
+    "France": {"Jobs": "Emploi", "Visa": "Visa", "Travel": "Voyage"},
+    "Netherlands": {"Jobs": "Vacatures", "Visa": "Visum", "Travel": "Reizen"},
+    "Belgium": {"Jobs": "Vacatures", "Visa": "Visum", "Travel": "Reizen"},
+    "Switzerland": {"Jobs": "Jobs", "Visa": "Visum", "Travel": "Reisen"},
+    "Austria": {"Jobs": "Jobs", "Visa": "Visum", "Travel": "Reisen"},
+    "UK": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "Ireland": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "Sweden": {"Jobs": "Jobb", "Visa": "Visum", "Travel": "Resor"},
+    "Norway": {"Jobs": "Stillinger", "Visa": "Visum", "Travel": "Reiser"},
+    "Denmark": {"Jobs": "Job", "Visa": "Visum", "Travel": "Rejser"},
+    "Finland": {"Jobs": "Työpaikat", "Visa": "Viisumi", "Travel": "Matkat"},
+    "Canada": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "USA": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "Mexico": {"Jobs": "Empleo", "Visa": "Visa", "Travel": "Viajes"},
+    "Panama": {"Jobs": "Empleo", "Visa": "Visa", "Travel": "Viajes"},
+    "Brazil": {"Jobs": "Emprego", "Visa": "Visto", "Travel": "Viagens"},
+    "Argentina": {"Jobs": "Empleo", "Visa": "Visa", "Travel": "Viajes"},
+    "Italy": {"Jobs": "Lavoro", "Visa": "Visto", "Travel": "Viaggi"},
+    "Turkey": {"Jobs": "İş", "Visa": "Vize", "Travel": "Seyahat"},
+    "Azerbaijan": {"Jobs": "İş", "Visa": "Viza", "Travel": "Səyahət"},
+    "Georgia": {"Jobs": "სამსახური", "Visa": "ვიზა", "Travel": "მოგზაურობა"},
+    "Spain": {"Jobs": "Empleo", "Visa": "Visado", "Travel": "Viajes"},
+    "Greece": {"Jobs": "Εργασία", "Visa": "Βίζα", "Travel": "Ταξίδια"},
+    "Pakistan": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+    "India": {"Jobs": "Jobs", "Visa": "Visa", "Travel": "Travel"},
+}
+
 
 def get_search_country(country):
     return SEARCH_COUNTRY_NAMES.get(country, country)
@@ -28,6 +74,11 @@ def get_search_country(country):
 
 def get_search_city(city):
     return SEARCH_CITY_NAMES.get(city, city)
+
+
+def get_search_category(country, category):
+    cat_map = CATEGORY_TRANSLATIONS.get(country, {})
+    return cat_map.get(category, category)
 
 
 def format_strict_title(raw_title, keyword, local_city, local_country, year):
@@ -59,13 +110,15 @@ def is_already_scraped(url):
         return False
 
 
-def build_search_urls(domain, keyword, search_city, category):
+def build_search_urls(domain, keyword, search_city, search_category, category):
     encoded_kw = quote(keyword)
     encoded_city = quote(search_city)
+    encoded_cat = quote(search_category)
     cat_lower = (category or "Jobs").lower()
 
     urls = [
         f"https://www.{domain}/search?q={encoded_kw}+{encoded_city}",
+        f"https://www.{domain}/search?q={encoded_cat}+{encoded_kw}+{encoded_city}",
         f"https://www.{domain}/search?q={encoded_kw}",
     ]
 
@@ -78,12 +131,12 @@ def build_search_urls(domain, keyword, search_city, category):
     elif cat_lower == "visa":
         urls.extend([
             f"https://www.{domain}/visa?q={encoded_kw}",
-            f"https://www.{domain}/search?q=visa+{encoded_kw}+{encoded_city}",
+            f"https://www.{domain}/search?q={encoded_cat}+{encoded_kw}+{encoded_city}",
         ])
     elif cat_lower == "travel":
         urls.extend([
             f"https://www.{domain}/travel?q={encoded_kw}",
-            f"https://www.{domain}/search?q=travel+{encoded_kw}+{encoded_city}",
+            f"https://www.{domain}/search?q={encoded_cat}+{encoded_kw}+{encoded_city}",
         ])
 
     urls.append(f"https://www.{domain}")
@@ -106,7 +159,7 @@ def is_relevant_candidate(href, title_text, category, blocked_url_terms):
             "job", "career", "vacancy", "opening", "hiring", "apply",
             "position", "work", "emploi", "trabajo", "vaga", "stellen", "offre",
             "وظائف", "توظيف", "求人", "採用", "채용", "招聘", "職缺",
-            "สมัครงาน", "việc làm", "kerja", "lowongan", "vacantes", "lavoro", "iş"
+            "งาน", "สมัครงาน", "việc làm", "kerja", "lowongan", "vacantes", "lavoro", "iş", "სამსახური", "εργασία"
         ]
         if not any(h in href_l or h in txt_l for h in job_hints):
             return False
@@ -146,6 +199,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
         return False
 
     search_country = get_search_country(target_country)
+    search_category = get_search_category(target_country, category)
 
     shuffled_cities = list(cities)
     random.shuffle(shuffled_cities)
@@ -156,7 +210,8 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
 
     print(
         f"[TRACE-INFO] Config -> Domains: {len(shuffled_domains)} | "
-        f"Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)}"
+        f"Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)} | "
+        f"SearchCategory: {search_category}"
     )
 
     for target_domain in shuffled_domains:
@@ -177,7 +232,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
             search_city = get_search_city(target_city)
 
             for keyword in shuffled_keywords:
-                search_urls = build_search_urls(target_domain, keyword, search_city, category)
+                search_urls = build_search_urls(target_domain, keyword, search_city, search_category, category)
 
                 for s_url in search_urls:
                     try:
@@ -287,7 +342,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                     'link': enriched_data['finalUrl'],
                                     'country': db_country,
                                     'category': category,
-                                    'query_used': f"Query: {keyword} | City: {search_city} | Domain: {target_domain}",
+                                    'query_used': f"Query: {keyword} | Category: {search_category} | City: {search_city} | Domain: {target_domain}",
                                     'status': 'pending',
                                     'audit_status': None
                                 }
