@@ -10,27 +10,37 @@ from domains import COUNTRY_DOMAINS
 from keywords import COUNTRY_KEYWORDS
 from cleaner import extract_strict_job_details
 
+try:
+    from config import SEARCH_COUNTRY_NAMES, SEARCH_CITY_NAMES
+except ImportError:
+    SEARCH_COUNTRY_NAMES = {}
+    SEARCH_CITY_NAMES = {}
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("Supabase environment variables missing")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-def format_strict_title(raw_title, keyword, city, country, year):
+def get_search_country(country):
+    return SEARCH_COUNTRY_NAMES.get(country, country)
+
+
+def get_search_city(city):
+    return SEARCH_CITY_NAMES.get(city, city)
+
+
+def format_strict_title(raw_title, keyword, local_city, local_country, year):
     base = re.sub(r'\s+', ' ', raw_title).strip() if raw_title else ""
-    suffix = f" - {keyword.capitalize()} Opportunity in {city}, {country} ({year}) | Direct Apply"
+    suffix = f" - {keyword} | {local_city}, {local_country} ({year})"
 
     if len(base) < 60:
-        title = (
-            f"{base}{suffix}"
-            if base
-            else f"Immediate {keyword.capitalize()} Opening in {city}, {country} ({year}) - Direct Online Application"
-        )
+        title = f"{base}{suffix}" if base else f"{keyword} - {local_city}, {local_country} ({year})"
     else:
         title = base
 
     if len(title) < 60:
-        title = f"{title} - Verified Listing & Direct Application Details for {city}"
+        title = f"{title} - {local_city} {local_country}"
 
     if len(title) > 100:
         title = title[:97].rsplit(' ', 1)[0] + "..."
@@ -49,9 +59,9 @@ def is_already_scraped(url):
         return False
 
 
-def build_search_urls(domain, keyword, city, category):
+def build_search_urls(domain, keyword, search_city, category):
     encoded_kw = quote(keyword)
-    encoded_city = quote(city)
+    encoded_city = quote(search_city)
     cat_lower = (category or "Jobs").lower()
 
     urls = [
@@ -87,14 +97,16 @@ def is_relevant_candidate(href, title_text, category, blocked_url_terms):
     if any(bad in href_l or bad in txt_l for bad in blocked_url_terms):
         return False
 
-    if len(title_text.strip()) < 16:
+    if len(title_text.strip()) < 12:
         return False
 
     cat_lower = (category or "Jobs").lower()
     if cat_lower == "jobs":
         job_hints = [
             "job", "career", "vacancy", "opening", "hiring", "apply",
-            "position", "work", "emploi", "trabajo", "vaga", "stellen", "offre"
+            "position", "work", "emploi", "trabajo", "vaga", "stellen", "offre",
+            "وظائف", "توظيف", "求人", "採用", "채용", "招聘", "職缺",
+            "สมัครงาน", "việc làm", "kerja", "lowongan", "vacantes", "lavoro", "iş"
         ]
         if not any(h in href_l or h in txt_l for h in job_hints):
             return False
@@ -133,6 +145,8 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
         print(f"[TRACE-STOP] No keywords found for category [{category}] in country [{target_country}]")
         return False
 
+    search_country = get_search_country(target_country)
+
     shuffled_cities = list(cities)
     random.shuffle(shuffled_cities)
     shuffled_domains = list(domains)
@@ -160,8 +174,10 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
             continue
 
         for target_city in shuffled_cities:
+            search_city = get_search_city(target_city)
+
             for keyword in shuffled_keywords:
-                search_urls = build_search_urls(target_domain, keyword, target_city, category)
+                search_urls = build_search_urls(target_domain, keyword, search_city, category)
 
                 for s_url in search_urls:
                     try:
@@ -219,7 +235,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
 
                             print(f"        [TRACE-EXTRACT] Extracting details for: {j_link}")
                             enriched_data = extract_strict_job_details(
-                                page, j_link, target_country, target_city, category
+                                page, j_link, target_country, target_city, category, keyword
                             )
 
                             if enriched_data and enriched_data.get('finalUrl'):
@@ -233,12 +249,17 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                     continue
 
                                 final_title = format_strict_title(
-                                    j_title, keyword, target_city, target_country, current_year
+                                    j_title, keyword, search_city, search_country, current_year
                                 )
-                                if (
-                                    target_country.lower() not in final_title.lower()
-                                    and target_city.lower() not in final_title.lower()
-                                ):
+
+                                location_tokens = [
+                                    target_country.lower(),
+                                    target_city.lower(),
+                                    search_country.lower(),
+                                    search_city.lower(),
+                                ]
+                                combined_check = (final_title + " " + snippet_body).lower()
+                                if not any(tok and tok in combined_check for tok in location_tokens):
                                     continue
 
                                 cta_parts = []
@@ -254,13 +275,19 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
 
                                 final_snippet = snippet_body + "\n\nDetails:\n" + "\n".join(cta_parts)
 
+                                db_country = (
+                                    f"{target_country} ({search_country}) - {target_city} ({search_city})"
+                                    if (search_country != target_country or search_city != target_city)
+                                    else f"{target_country} ({target_city})"
+                                )
+
                                 insert_data = {
                                     'title': final_title,
                                     'snippet': final_snippet,
                                     'link': enriched_data['finalUrl'],
-                                    'country': f"{target_country} ({target_city})",
+                                    'country': db_country,
                                     'category': category,
-                                    'query_used': f"Query: {keyword} on {target_domain}",
+                                    'query_used': f"Query: {keyword} | City: {search_city} | Domain: {target_domain}",
                                     'status': 'pending',
                                     'audit_status': None
                                 }
