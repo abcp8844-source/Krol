@@ -15,31 +15,27 @@ gemini_api_key = raw_api_key.strip() if raw_api_key else None
 gemini_client = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
 
 def evaluate_and_clean_content(old_title, old_snippet, target_country="", target_category="Jobs"):
-    prompt = f"""
-    You are a sharp, thorough data quality auditor and translator for international Job, Visa, and Travel portals.
-    Inspect the provided raw post carefully so useful details, contact/application info, eligibility rules, requirements, salaries, or travel/visa facts are caught and preserved cleanly.
+   prompt = f"""
+    You are a strict, practical data cleaner and translator for an international Job, Visa, and Travel portal.
+    Keep all genuine, important job-related details that are present—including location, eligibility (citizens, non-citizens/outsiders, or local residents), requirements, contact details, or links—and never drop real material just because salary or extra fields are absent. However, for Jobs, you MUST check whether there is an actual hiring or application process (how to apply, where to go, or steps to apply). If a post is only general information without a real hiring/application method, reject it (`"reject"`). Only posts that have a genuine hiring/application method should be treated as actionable and kept (`"update"`).
 
     Target Country: {target_country}
     Target Category: {target_category}
     Current Title: {old_title}
     Current Snippet: {old_snippet}
 
-    DETAILED INSPECTION & RETENTION RULES:
-    1. **Maximize Useful Information Retention:** Keep as much real, substantive information as exists in the source—whether it spans 400–800 words/characters or even up to ~1,200+ words/characters of genuine details. Do not compress away real facts, numbers, dates, requirements, contacts, or instructions.
-    2. **Catch Important Details:** Pay close attention to specific entities/companies/institutions, role/visa/travel specifics, compensation or fees, qualifications/eligibility, deadlines/timelines, and how/where to apply or contact. If details are scattered or roughly formatted, organize them cleanly without losing substance.
-    3. **Country & Category Check:** Verify that the post genuinely aligns with the Target Country ({target_country}) and Target Category ({target_category}). Reject only when it is completely off-topic, empty/pure junk, or a generic salary/market overview with no actionable job, visa, or travel details.
-    4. **Action Determination ("action"):**
-       - Return `"reject"` if the post is pure junk, empty, off-topic/mismatched, or has no real actionable substance. (Set `title` and `snippet` to `null`).
-       - Return `"no_change"` if the content is already clean, accurate, and needs no edits.
-       - Return `"update"` if the content has real value and needs cleaning, structuring, or translation while retaining maximum factual detail.
-    5. **Zero Fabrication:** Never invent missing facts, links, emails, salaries, or rules. Only clean, organize, and translate what is present.
+    EVALUATION RULES:
+    1. **Mandatory Hiring / Application Method (Jobs):** Check clearly whether the post explains how hiring works or how the candidate applies (such as specific steps to apply, where/how to submit an application, a link, email, phone/WhatsApp, or direct application instructions). If it is merely general information without a real way or process to apply/hire, choose `"reject"`. (For Visa / Travel, require concrete rules, requirements, steps, fees, or booking/application details; reject vague filler.)
+    2. **Keep All Important Related Material & All Fields:** Check every piece of information provided across the title, snippet, and any associated link, email, phone number, location/city, country, or category details. Retain all genuine job-related details—including location, requirements, eligibility, contact details, and links—organized cleanly.
+    3. **Clean Around the Edges Without Cutting Real Substance:** Remove junk around the post such as cookie banners, ads, privacy/legal policies, navigation/footer noise, and clutter. Where a real hiring/application method exists and the post has substantive information—even if 400 to 800+ words—keep the full material cleanly and neatly without cutting down real details.
+    4. **Zero Fabrication & No Extra Writing:** Never invent missing links, emails, phone numbers, requirements, salaries, or application steps, and do not add outside commentary or filler. Only clean, organize, structure, and translate what is genuinely present.
 
     OUTPUT FORMAT: Return strictly a valid JSON object with three keys:
-    - "action": "reject" | "no_change" | "update"
-    - "title": cleaned/translated title (or null if rejected / string if no_change)
-    - "snippet": cleaned/translated snippet (or null if rejected / string if no_change)
+    - "action": "reject" | "update"
+    - "title": cleaned/translated title (or null if rejected)
+    - "snippet": cleaned/translated snippet (or null if rejected)
     """
-
+    
     models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
 
     for model_name in models_to_try:
