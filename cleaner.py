@@ -9,6 +9,11 @@ except ImportError:
     SEARCH_COUNTRY_NAMES = {}
     SEARCH_CITY_NAMES = {}
 
+try:
+    from scraper import CATEGORY_TRANSLATIONS
+except ImportError:
+    CATEGORY_TRANSLATIONS = {}
+
 
 def clean_text_content(text):
     if not text:
@@ -34,10 +39,6 @@ def extract_strict_job_details(page, target_url, target_country, target_city, ca
 
         page.goto(target_url, wait_until="domcontentloaded", timeout=25000)
         page.wait_for_timeout(2000)
-
-        current_url_lower = page.url.lower()
-        if any(p in current_url_lower for p in ["/login", "/signin", "/register", "/signup", "/auth/"]):
-            return None
 
         extracted_data = page.evaluate("""() => {
             const unwanted = document.querySelectorAll('script, style, nav, footer, header, aside, form, iframe, button, noscript');
@@ -79,22 +80,20 @@ def extract_strict_job_details(page, target_url, target_country, target_city, ca
         page_text = clean_text_content(extracted_data.get("pageText", ""))
         page_text_lower = page_text.lower()
 
-        country_names = [target_country, SEARCH_COUNTRY_NAMES.get(target_country, "")]
-        city_names = [target_city, SEARCH_CITY_NAMES.get(target_city, "")]
+        country_variants = [target_country, SEARCH_COUNTRY_NAMES.get(target_country, "")]
+        city_variants = [target_city, SEARCH_CITY_NAMES.get(target_city, "")]
 
-        country_matched = any(c.strip().lower() in page_text_lower for c in country_names if c and c.strip())
-        city_matched = any(ct.strip().lower() in page_text_lower for ct in city_names if ct and ct.strip())
+        country_matched = any(c.strip().lower() in page_text_lower for c in country_variants if c and c.strip())
+        city_matched = any(ct.strip().lower() in page_text_lower for ct in city_variants if ct and ct.strip())
 
         if not (country_matched and city_matched):
             return None
 
+        translated_cat = CATEGORY_TRANSLATIONS.get(target_country, {}).get(category, "")
         category_keywords = COUNTRY_KEYWORDS.get(target_country, {}).get(category, [])
-        category_matched = False
-        if search_keyword and search_keyword.lower() in page_text_lower:
-            category_matched = True
-        elif category_keywords and any(kw.lower() in page_text_lower for kw in category_keywords):
-            category_matched = True
+        cat_terms = [category, translated_cat, search_keyword] + list(category_keywords)
 
+        category_matched = any(t.strip().lower() in page_text_lower for t in cat_terms if t and t.strip())
         if not category_matched:
             return None
 
