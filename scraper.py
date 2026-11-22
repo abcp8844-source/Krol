@@ -15,12 +15,17 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
 def format_strict_title(raw_title, keyword, city, country, year):
     base = re.sub(r'\s+', ' ', raw_title).strip() if raw_title else ""
     suffix = f" - {keyword.capitalize()} Opportunity in {city}, {country} ({year}) | Direct Apply"
-    
+
     if len(base) < 60:
-        title = f"{base}{suffix}" if base else f"Immediate {keyword.capitalize()} Opening in {city}, {country} ({year}) - Direct Online Application"
+        title = (
+            f"{base}{suffix}"
+            if base
+            else f"Immediate {keyword.capitalize()} Opening in {city}, {country} ({year}) - Direct Online Application"
+        )
     else:
         title = base
 
@@ -34,6 +39,7 @@ def format_strict_title(raw_title, keyword, city, country, year):
 
     return title
 
+
 def is_already_scraped(url):
     try:
         res = supabase.table("zunex").select("id").eq("link", url).execute()
@@ -42,19 +48,82 @@ def is_already_scraped(url):
         print(f"[TRACE-DB-CHECK-ERROR] {e}")
         return False
 
+
+def build_search_urls(domain, keyword, city, category):
+    encoded_kw = quote(keyword)
+    encoded_city = quote(city)
+    cat_lower = (category or "Jobs").lower()
+
+    urls = [
+        f"https://www.{domain}/search?q={encoded_kw}+{encoded_city}",
+        f"https://www.{domain}/search?q={encoded_kw}",
+    ]
+
+    if cat_lower == "jobs":
+        urls.extend([
+            f"https://www.{domain}/jobs?q={encoded_kw}&l={encoded_city}",
+            f"https://www.{domain}/jobs?q={encoded_kw}",
+            f"https://www.{domain}/vagas-{encoded_kw}",
+        ])
+    elif cat_lower == "visa":
+        urls.extend([
+            f"https://www.{domain}/visa?q={encoded_kw}",
+            f"https://www.{domain}/search?q=visa+{encoded_kw}+{encoded_city}",
+        ])
+    elif cat_lower == "travel":
+        urls.extend([
+            f"https://www.{domain}/travel?q={encoded_kw}",
+            f"https://www.{domain}/search?q=travel+{encoded_kw}+{encoded_city}",
+        ])
+
+    urls.append(f"https://www.{domain}")
+    return urls
+
+
+def is_relevant_candidate(href, title_text, category, blocked_url_terms):
+    href_l = href.lower()
+    txt_l = title_text.lower()
+
+    if any(bad in href_l or bad in txt_l for bad in blocked_url_terms):
+        return False
+
+    if len(title_text.strip()) < 16:
+        return False
+
+    cat_lower = (category or "Jobs").lower()
+    if cat_lower == "jobs":
+        job_hints = [
+            "job", "career", "vacancy", "opening", "hiring", "apply",
+            "position", "work", "emploi", "trabajo", "vaga", "stellen", "offre"
+        ]
+        if not any(h in href_l or h in txt_l for h in job_hints):
+            return False
+
+    return True
+
+
+def safe_goto(page, url, timeout=25000):
+    page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+    try:
+        page.wait_for_load_state("networkidle", timeout=6000)
+    except Exception:
+        pass
+    time.sleep(2)
+
+
 def search_and_insert_post(page, target_country, category, current_year, blocked_url_terms):
     print(f"\n==================================================")
     print(f"[TRACE-COUNTRY] Starting process for Country: [{target_country}] | Category: [{category}]")
     print(f"==================================================")
-    
+
     cities = COUNTRY_CITIES.get(target_country, [target_country])
     domains = COUNTRY_DOMAINS.get(target_country, [])
     country_kw_dict = COUNTRY_KEYWORDS.get(target_country, {})
-    
+
     if not domains:
         print(f"[TRACE-STOP] No domains configured for country: {target_country}")
         return False
-        
+
     if isinstance(country_kw_dict, dict):
         keywords = list(country_kw_dict.get(category, []))
     else:
@@ -71,16 +140,17 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
     shuffled_keywords = list(keywords)
     random.shuffle(shuffled_keywords)
 
-    print(f"[TRACE-INFO] Config -> Domains: {len(shuffled_domains)} | Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)}")
+    print(
+        f"[TRACE-INFO] Config -> Domains: {len(shuffled_domains)} | "
+        f"Keywords: {len(shuffled_keywords)} | Cities: {len(shuffled_cities)}"
+    )
 
     for target_domain in shuffled_domains:
         print(f"\n  [TRACE-DOMAIN] Evaluating Domain -> [https://www.{target_domain}]")
         base_domain_url = f"https://www.{target_domain}"
-        
+
         try:
-            page.goto(base_domain_url, timeout=15000, wait_until="domcontentloaded")
-            time.sleep(1.5)
-            
+            safe_goto(page, base_domain_url, timeout=25000)
             page_text = page.content().lower()
             if any(wall in page_text for wall in ["please sign in", "log in to continue", "sign in to view", "login required"]):
                 print(f"  [TRACE-WALL] Login/Sign-in wall detected on domain [{target_domain}]. Shifting to next domain.")
@@ -91,76 +161,86 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
 
         for target_city in shuffled_cities:
             for keyword in shuffled_keywords:
-                encoded_kw = quote(keyword)
-                encoded_city = quote(target_city)
-                
-                search_urls = [
-                    f"https://www.{target_domain}/jobs?q={encoded_kw}&l={encoded_city}",
-                    f"https://www.{target_domain}/search?q={encoded_kw}",
-                    f"https://www.{target_domain}/vagas-{encoded_kw}",
-                    f"https://www.{target_domain}"
-                ]
+                search_urls = build_search_urls(target_domain, keyword, target_city, category)
+
                 for s_url in search_urls:
                     try:
                         print(f"    [TRACE-NAV] Navigating to: {s_url}")
-                        page.goto(s_url, timeout=15000)
-                        time.sleep(2)
-                        
+                        safe_goto(page, s_url, timeout=25000)
+
                         current_content = page.content().lower()
                         if any(wall in current_content for wall in ["sign in to view", "log in to apply", "please login"]):
                             print(f"    [TRACE-WALL] Sign-in wall encountered on search URL. Moving on.")
                             break
 
-                        page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(1)
-                        
+                        for _ in range(2):
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                            time.sleep(1.2)
+
                         raw_links = page.eval_on_selector_all(
                             "a[href]",
                             """elements => elements.map(el => ({
                                 href: el.href,
-                                text: el.innerText ? el.innerText.trim() : ''
+                                text: el.innerText ? el.innerText.replace(/\\s+/g, ' ').trim() : ''
                             }))"""
                         )
-                        
+
                         candidate_links = []
+                        seen_hrefs = set()
+
                         for item in raw_links:
-                            href = item['href']
-                            title_text = item['text']
-                            txt = title_text.lower()
-                            
-                            if any(bad in href.lower() or bad in txt for bad in blocked_url_terms):
-                                continue
+                            href = (item.get('href') or '').strip()
+                            title_text = (item.get('text') or '').strip()
+
                             if href.startswith('/'):
                                 full_link = f"https://www.{target_domain}{href}"
                             elif href.startswith('http'):
                                 full_link = href
                             else:
                                 continue
+
                             if full_link.rstrip('/') == f"https://www.{target_domain}":
                                 continue
-                            if len(title_text) > 12:
-                                candidate_links.append((full_link, title_text))
 
-                        print(f"      [TRACE-PARSE] Found {len(candidate_links)} candidate links on {target_domain}")
+                            if full_link in seen_hrefs:
+                                continue
 
-                        for j_link, j_title in candidate_links[:20]:
+                            if not is_relevant_candidate(full_link, title_text, category, blocked_url_terms):
+                                continue
+
+                            seen_hrefs.add(full_link)
+                            candidate_links.append((full_link, title_text))
+
+                        print(f"      [TRACE-PARSE] Found {len(candidate_links)} filtered candidate links on {target_domain}")
+
+                        for j_link, j_title in candidate_links[:25]:
                             if is_already_scraped(j_link):
                                 continue
-                            
+
                             print(f"        [TRACE-EXTRACT] Extracting details for: {j_link}")
                             enriched_data = extract_strict_job_details(
                                 page, j_link, target_country, target_city, category
                             )
+
                             if enriched_data and enriched_data.get('finalUrl'):
+                                snippet_body = (enriched_data.get("snippet") or "").strip()
+                                if len(snippet_body) < 80:
+                                    print(f"        [TRACE-REJECT] Extracted snippet too short/thin ({len(snippet_body)} chars).")
+                                    continue
+
                                 if is_already_scraped(enriched_data['finalUrl']):
                                     print(f"        [TRACE-REJECT] Final URL already scraped.")
                                     continue
+
                                 final_title = format_strict_title(
                                     j_title, keyword, target_city, target_country, current_year
                                 )
-                                if target_country.lower() not in final_title.lower() and target_city.lower() not in final_title.lower():
+                                if (
+                                    target_country.lower() not in final_title.lower()
+                                    and target_city.lower() not in final_title.lower()
+                                ):
                                     continue
-                                
+
                                 cta_parts = []
                                 if enriched_data.get("salary") and enriched_data["salary"] != "Not Specified":
                                     cta_parts.append(f"Estimated Amount/Salary: {enriched_data['salary']}")
@@ -172,7 +252,7 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                                     cta_parts.append(f"Email: {enriched_data['email']}")
                                 cta_parts.append(f"Direct Apply Link: {enriched_data['finalUrl']}")
 
-                                final_snippet = enriched_data.get("snippet", "") + "\n\nDetails:\n" + "\n".join(cta_parts)
+                                final_snippet = snippet_body + "\n\nDetails:\n" + "\n".join(cta_parts)
 
                                 insert_data = {
                                     'title': final_title,
@@ -195,11 +275,12 @@ def search_and_insert_post(page, target_country, category, current_year, blocked
                     except Exception as nav_err:
                         print(f"    [TRACE-NAV-ERROR] {nav_err}")
                         continue
-                        
+
         print(f"  [TRACE-DOMAIN-EXHAUST] Domain [{target_domain}] checked. Shifting to next domain.")
-        
+
     print(f"[TRACE-COUNTRY-EXHAUST] All domains exhausted for country [{target_country}] in [{category}].")
     return False
+
 
 def run_independent_crawler():
     if not supabase:
@@ -209,7 +290,7 @@ def run_independent_crawler():
     today = datetime.now().strftime("%A")
     current_year = datetime.now().year
     day_countries = SCHEDULE.get(today, [])
-    
+
     print(f"\n==================================================")
     print(f"=== PLAYWRIGHT CRAWLER | Day: {today} | Year: {current_year} ===")
     print(f"=== Scheduled Countries: {day_countries} ===")
@@ -220,9 +301,11 @@ def run_independent_crawler():
         return
 
     blocked_url_terms = [
-        "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in", 
+        "cookie", "privacy", "legal", "terms", "login", "register", "faq", "sign-in",
         "order", "sort", "filter", "search?", "help", "aviso", "ads", "forgot", "download",
-        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources", "/employers", "/about", "/contact"
+        "/salary", "/career-advice", "/resume", "/blog", "/article", "/resources",
+        "/employers", "/about", "/contact", "facebook.com", "twitter.com", "x.com",
+        "linkedin.com", "instagram.com", "youtube.com", "mailto:", "tel:"
     ]
 
     with sync_playwright() as p:
@@ -238,16 +321,16 @@ def run_independent_crawler():
                 "--ignore-ssl-errors"
             ]
         )
-        
+
         context = browser.new_context(
             user_agent=random.choice(USER_AGENTS),
             viewport={"width": 1366, "height": 768},
             bypass_csp=True,
             ignore_https_errors=True
         )
-        
+
         page = context.new_page()
-        page.set_default_timeout(20000)
+        page.set_default_timeout(25000)
 
         try:
             print(f"\n--------------------------------------------------")
@@ -291,6 +374,7 @@ def run_independent_crawler():
         finally:
             browser.close()
             print("[TRACE-SHUTDOWN] Playwright browser closed cleanly.")
+
 
 if __name__ == "__main__":
     run_independent_crawler()
